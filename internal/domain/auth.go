@@ -5,12 +5,26 @@ import (
 	"time"
 )
 
+const (
+	// CredentialStatusPendingRegistration marks auth data created before email
+	// verification finishes.
+	CredentialStatusPendingRegistration = "pending_registration"
+	// CredentialStatusEmailVerified marks auth data after the email code is
+	// accepted and before final token issuing.
+	CredentialStatusEmailVerified = "email_verified"
+	// CredentialStatusRegistrationFailed marks auth data compensated by the
+	// registration saga.
+	CredentialStatusRegistrationFailed = "registration_failed"
+)
+
 // Credential is the auth-service write model for one user's credentials.
 type Credential struct {
 	UserID        string
 	Email         string
+	Username      string
 	PasswordHash  string
 	EmailVerified bool
+	Status        string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
@@ -19,6 +33,7 @@ type Credential struct {
 type CreateCredentialParams struct {
 	UserID       string
 	Email        string
+	Username     string
 	PasswordHash string
 }
 
@@ -40,11 +55,41 @@ type PendingRegistrationResult struct {
 	ExpiresIn        string
 }
 
+// RegistrationEmailVerificationResult reports a successful verification-code
+// check for a pending registration.
+type RegistrationEmailVerificationResult struct {
+	UserID string
+	Email  string
+	Status string
+}
+
+// TokenPair is the auth-owned login token result returned after registration
+// completion.
+type TokenPair struct {
+	UserID       string
+	AccessToken  string
+	RefreshToken string
+	TokenType    string
+	ExpiresIn    int64
+}
+
+// CreateRefreshTokenParams contains the data required to persist a refresh
+// token record.
+type CreateRefreshTokenParams struct {
+	ID        string
+	UserID    string
+	TokenHash string
+	ExpiresAt time.Time
+}
+
 // AuthRepository persists auth-service credentials and verification codes.
 type AuthRepository interface {
 	Create(ctx context.Context, params CreateCredentialParams) (*Credential, error)
 	CreateVerificationCode(ctx context.Context, params CreateVerificationCodeParams) error
+	VerifyRegistrationEmail(ctx context.Context, userID, tokenHash string, now time.Time) (*Credential, error)
+	CreateRefreshToken(ctx context.Context, params CreateRefreshTokenParams) error
 	GetByUserID(ctx context.Context, userID string) (*Credential, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
+	DeactivateRegistrationAuth(ctx context.Context, userID string) error
 	DeleteByUserID(ctx context.Context, userID string) error
 }

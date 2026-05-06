@@ -10,12 +10,18 @@ import (
 // auth data compensation within auth-service.
 type AuthService interface {
 	// CreateCredential persists the auth credential owned by auth-service.
-	CreateCredential(ctx context.Context, userID, email, passwordHash string) (*auth.Credential, error)
+	CreateCredential(ctx context.Context, userID, email, username, passwordHash string) (*auth.Credential, error)
 	// CreatePendingRegistration creates the credential and an email verification
 	// code for the first registration slice.
-	CreatePendingRegistration(ctx context.Context, userID, email, passwordHash string) (*auth.PendingRegistrationResult, error)
+	CreatePendingRegistration(ctx context.Context, userID, email, username, passwordHash string) (*auth.PendingRegistrationResult, error)
 	// ExistsByEmail reports whether auth-service already owns the supplied email.
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
+	// VerifyRegistrationEmail verifies the email code for pending registration.
+	VerifyRegistrationEmail(ctx context.Context, userID, code string) (*auth.RegistrationEmailVerificationResult, error)
+	// IssueRegistrationTokens creates auth-owned login tokens after saga completion.
+	IssueRegistrationTokens(ctx context.Context, userID string) (*auth.TokenPair, error)
+	// DeactivateRegistrationAuth marks registration auth data inactive for compensation.
+	DeactivateRegistrationAuth(ctx context.Context, userID string) error
 	// DeleteCredential removes auth data for compensation flows.
 	DeleteCredential(ctx context.Context, userID string) error
 }

@@ -1,11 +1,15 @@
 package service
 
 import (
+	"auth-service/config"
 	auth "auth-service/internal/domain"
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/ofm-microseervices/ofm-common/pkg/logging"
 	"strings"
@@ -18,11 +22,12 @@ const invalidCreateCredentialCommandMessage = "invalid create auth credential co
 
 type authService struct {
 	repo AuthRepository
+	cfg  config.JWTConfig
 	log  Logger
 }
 
 // New constructs the auth application service.
-func New(repo AuthRepository, log Logger) (AuthService, error) {
+func New(repo AuthRepository, cfg config.JWTConfig, log Logger) (AuthService, error) {
 	if repo == nil {
 		return nil, ErrNilAuthRepository
 	}
@@ -32,12 +37,13 @@ func New(repo AuthRepository, log Logger) (AuthService, error) {
 
 	return &authService{
 		repo: repo,
+		cfg:  cfg,
 		log:  log.With(logging.String("module", "application")),
 	}, nil
 }
 
 // CreateCredential validates and persists the auth credential.
-func (s *authService) CreateCredential(ctx context.Context, userID, email, passwordHash string) (*auth.Credential, error) {
+func (s *authService) CreateCredential(ctx context.Context, userID, email, username, passwordHash string) (*auth.Credential, error) {
 	s.log.Info("create auth credential command received",
 		logging.String("user_id", userID),
 		logging.String("email", email),
@@ -51,6 +57,10 @@ func (s *authService) CreateCredential(ctx context.Context, userID, email, passw
 		s.log.Error(invalidCreateCredentialCommandMessage, logging.String("reason", "empty email"))
 		return nil, auth.ErrInvalidEmail
 	}
+	if strings.TrimSpace(username) == "" {
+		s.log.Error(invalidCreateCredentialCommandMessage, logging.String("reason", "empty username"))
+		return nil, auth.ErrInvalidUsername
+	}
 	if strings.TrimSpace(passwordHash) == "" {
 		s.log.Error(invalidCreateCredentialCommandMessage, logging.String("reason", "empty password_hash"))
 		return nil, auth.ErrInvalidPasswordHash
@@ -59,6 +69,7 @@ func (s *authService) CreateCredential(ctx context.Context, userID, email, passw
 	credential, err := s.repo.Create(ctx, auth.CreateCredentialParams{
 		UserID:       userID,
 		Email:        email,
+		Username:     username,
 		PasswordHash: passwordHash,
 	})
 	if err != nil {
@@ -106,8 +117,8 @@ func (s *authService) ExistsByEmail(ctx context.Context, email string) (bool, er
 
 // CreatePendingRegistration creates the credential and issues a verification
 // code owned by auth-service.
-func (s *authService) CreatePendingRegistration(ctx context.Context, userID, email, passwordHash string) (*auth.PendingRegistrationResult, error) {
-	credential, err := s.CreateCredential(ctx, userID, email, passwordHash)
+func (s *authService) CreatePendingRegistration(ctx context.Context, userID, email, username, passwordHash string) (*auth.PendingRegistrationResult, error) {
+	credential, err := s.CreateCredential(ctx, userID, email, username, passwordHash)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +147,85 @@ func (s *authService) CreatePendingRegistration(ctx context.Context, userID, ema
 	}, nil
 }
 
+// VerifyRegistrationEmail verifies the pending email code and marks the auth
+// credential as email-verified.
+func (s *authService) VerifyRegistrationEmail(ctx context.Context, userID, code string) (*auth.RegistrationEmailVerificationResult, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, auth.ErrInvalidUserID
+	}
+	if strings.TrimSpace(code) == "" {
+		return nil, auth.ErrInvalidVerificationCode
+	}
+
+	credential, err := s.repo.VerifyRegistrationEmail(ctx, strings.TrimSpace(userID), hashVerificationCode(strings.TrimSpace(code)), time.Now().UTC())
+	if err != nil {
+		s.log.Error("verify registration email failed", logging.String("user_id", userID), logging.Err(err))
+		return nil, err
+	}
+
+	return &auth.RegistrationEmailVerificationResult{
+		UserID: credential.UserID,
+		Email:  credential.Email,
+		Status: "verified",
+	}, nil
+}
+
+// IssueRegistrationTokens creates an access token and stores a refresh token
+// for an email-verified credential.
+func (s *authService) IssueRegistrationTokens(ctx context.Context, userID string) (*auth.TokenPair, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, auth.ErrInvalidUserID
+	}
+
+	credential, err := s.repo.GetByUserID(ctx, strings.TrimSpace(userID))
+	if err != nil {
+		return nil, err
+	}
+	if !credential.EmailVerified {
+		return nil, auth.ErrEmailNotVerified
+	}
+	if credential.Status != auth.CredentialStatusEmailVerified {
+		return nil, auth.ErrEmailNotVerified
+	}
+
+	now := time.Now().UTC()
+	accessToken, err := s.signAccessToken(credential, now)
+	if err != nil {
+		return nil, err
+	}
+	refreshToken, err := generateRandomToken(s.cfg.RefreshTokenBytes)
+	if err != nil {
+		return nil, auth.ErrFailedToCreateRefreshToken
+	}
+
+	if err := s.repo.CreateRefreshToken(ctx, auth.CreateRefreshTokenParams{
+		ID:        uuid.NewString(),
+		UserID:    credential.UserID,
+		TokenHash: hashVerificationCode(refreshToken),
+		ExpiresAt: now.Add(s.cfg.RefreshTokenTTL),
+	}); err != nil {
+		return nil, err
+	}
+
+	return &auth.TokenPair{
+		UserID:       credential.UserID,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(s.cfg.AccessTokenTTL.Seconds()),
+	}, nil
+}
+
+// DeactivateRegistrationAuth marks auth registration data inactive for
+// compensation.
+func (s *authService) DeactivateRegistrationAuth(ctx context.Context, userID string) error {
+	if strings.TrimSpace(userID) == "" {
+		return auth.ErrInvalidUserID
+	}
+
+	return s.repo.DeactivateRegistrationAuth(ctx, strings.TrimSpace(userID))
+}
+
 func generateVerificationCode() (string, error) {
 	buf := make([]byte, 3)
 	if _, err := rand.Read(buf); err != nil {
@@ -149,4 +239,40 @@ func generateVerificationCode() (string, error) {
 func hashVerificationCode(code string) string {
 	sum := sha256.Sum256([]byte(code))
 	return hex.EncodeToString(sum[:])
+}
+
+func generateRandomToken(bytesLen int) (string, error) {
+	if bytesLen <= 0 {
+		bytesLen = 32
+	}
+	buf := make([]byte, bytesLen)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func (s *authService) signAccessToken(credential *auth.Credential, now time.Time) (string, error) {
+	header, err := json.Marshal(map[string]string{"alg": "HS256", "typ": "JWT"})
+	if err != nil {
+		return "", err
+	}
+	claims, err := json.Marshal(map[string]any{
+		"sub":      credential.UserID,
+		"email":    credential.Email,
+		"username": credential.Username,
+		"iat":      now.Unix(),
+		"exp":      now.Add(s.cfg.AccessTokenTTL).Unix(),
+	})
+	if err != nil {
+		return "", err
+	}
+
+	unsigned := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(claims)
+	mac := hmac.New(sha256.New, []byte(s.cfg.Secret))
+	if _, err := mac.Write([]byte(unsigned)); err != nil {
+		return "", err
+	}
+
+	return unsigned + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), nil
 }

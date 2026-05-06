@@ -1,6 +1,7 @@
 package appfx
 
 import (
+	"auth-service/config"
 	app "auth-service/internal/application"
 	auth "auth-service/internal/domain"
 	"github.com/ofm-microseervices/ofm-common/pkg/logging"
@@ -14,6 +15,6 @@ var ServiceModule = fx.Options(
 )
 
 // ProvideAuthService constructs the auth application service.
-func ProvideAuthService(repo auth.AuthRepository, lg logging.Logger) (app.AuthService, error) {
-	return app.New(repo, lg)
+func ProvideAuthService(repo auth.AuthRepository, cfg *config.Config, lg logging.Logger) (app.AuthService, error) {
+	return app.New(repo, cfg.JWT, lg)
 }

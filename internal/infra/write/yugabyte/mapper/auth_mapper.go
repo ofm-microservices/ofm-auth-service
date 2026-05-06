@@ -10,8 +10,10 @@ func MapCredentialRowToDomain(row model.CredentialRow) *auth.Credential {
 	return &auth.Credential{
 		UserID:        row.UserID,
 		Email:         row.Email,
+		Username:      row.Username,
 		PasswordHash:  row.PasswordHash,
 		EmailVerified: row.EmailVerified,
+		Status:        row.Status,
 		CreatedAt:     row.CreatedAt,
 		UpdatedAt:     row.UpdatedAt,
 	}

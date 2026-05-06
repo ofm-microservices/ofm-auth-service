@@ -5,6 +5,7 @@ import (
 	"auth-service/internal/infra/write/yugabyte/mapper"
 	"auth-service/internal/infra/write/yugabyte/model"
 	"context"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -33,12 +34,15 @@ func (r *repo) Create(ctx context.Context, params domain.CreateCredentialParams)
 		createCredentialQuery,
 		params.UserID,
 		params.Email,
+		params.Username,
 		params.PasswordHash,
 	).Scan(
 		&row.UserID,
 		&row.Email,
+		&row.Username,
 		&row.PasswordHash,
 		&row.EmailVerified,
+		&row.Status,
 		&row.CreatedAt,
 		&row.UpdatedAt,
 	); err != nil {
@@ -63,13 +67,48 @@ func (r *repo) CreateVerificationCode(ctx context.Context, params domain.CreateV
 	return nil
 }
 
+func (r *repo) VerifyRegistrationEmail(ctx context.Context, userID, tokenHash string, now time.Time) (*domain.Credential, error) {
+	var row model.CredentialRow
+	if err := r.db.QueryRowContext(ctx, verifyRegistrationEmailQuery, userID, tokenHash, now).Scan(
+		&row.UserID,
+		&row.Email,
+		&row.Username,
+		&row.PasswordHash,
+		&row.EmailVerified,
+		&row.Status,
+		&row.CreatedAt,
+		&row.UpdatedAt,
+	); err != nil {
+		return nil, r.translator.TranslateVerifyEmailError(err)
+	}
+
+	return mapper.MapCredentialRowToDomain(row), nil
+}
+
+func (r *repo) CreateRefreshToken(ctx context.Context, params domain.CreateRefreshTokenParams) error {
+	if _, err := r.db.ExecContext(
+		ctx,
+		createRefreshTokenQuery,
+		params.ID,
+		params.UserID,
+		params.TokenHash,
+		params.ExpiresAt,
+	); err != nil {
+		return r.translator.TranslateCreateRefreshTokenError(err)
+	}
+
+	return nil
+}
+
 func (r *repo) GetByUserID(ctx context.Context, userID string) (*domain.Credential, error) {
 	var row model.CredentialRow
 	if err := r.db.QueryRowContext(ctx, getCredentialByUserIDQuery, userID).Scan(
 		&row.UserID,
 		&row.Email,
+		&row.Username,
 		&row.PasswordHash,
 		&row.EmailVerified,
+		&row.Status,
 		&row.CreatedAt,
 		&row.UpdatedAt,
 	); err != nil {
@@ -82,10 +121,27 @@ func (r *repo) GetByUserID(ctx context.Context, userID string) (*domain.Credenti
 func (r *repo) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	var exists bool
 	if err := r.db.QueryRowContext(ctx, existsCredentialByEmailQuery, email).Scan(&exists); err != nil {
-		return false, WrapFindCredentialError(err)
+		return false, domain.ErrFailedToFindCredential
 	}
 
 	return exists, nil
+}
+
+func (r *repo) DeactivateRegistrationAuth(ctx context.Context, userID string) error {
+	result, err := r.db.ExecContext(ctx, deactivateRegistrationAuthQuery, userID)
+	if err != nil {
+		return r.translator.TranslateDeactivateCredentialError(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return r.translator.TranslateDeactivateCredentialError(err)
+	}
+	if rowsAffected == 0 {
+		return domain.ErrAuthNotFound
+	}
+
+	return nil
 }
 
 func (r *repo) DeleteByUserID(ctx context.Context, userID string) error {

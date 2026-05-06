@@ -15,6 +15,10 @@ var _ = Describe("bootstrap unit cases", func() {
 		err := EnsureStream(config.NATSConfig{}, nil)
 		Expect(err).To(MatchError(ErrNilLogger))
 
+		lg, err := logging.New("auth-service", "test", "debug")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(EnsureStream(config.NATSConfig{URL: "nats://127.0.0.1:1"}, lg)).To(HaveOccurred())
+
 		_, err = Connect(config.NATSConfig{URL: "nats://127.0.0.1:1"})
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("connect to nats"))
