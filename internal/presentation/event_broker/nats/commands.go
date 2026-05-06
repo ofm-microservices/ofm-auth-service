@@ -5,6 +5,7 @@ type createAuthCommand struct {
 	ClientID     string `json:"client_id"`
 	UserID       string `json:"user_id"`
 	Email        string `json:"email"`
+	Username     string `json:"username"`
 	PasswordHash string `json:"password_hash"`
 	SagaID       string `json:"saga_id,omitempty"`
 }

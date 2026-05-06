@@ -22,6 +22,7 @@ import (
 
 func TestYugabyteRepository(t *testing.T) {
 	t.Helper()
+	testcontainers.SkipIfProviderIsNotHealthy(t)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Yugabyte Repository Suite")
 }
@@ -57,7 +58,7 @@ var _ = Describe("repository integration", func() {
 	var repoAny auth.AuthRepository
 
 	BeforeEach(func() {
-		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE email_verification_codes, auth_credentials`)
+		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE email_verification_codes, refresh_tokens, auth_credentials CASCADE`)
 		Expect(err).NotTo(HaveOccurred())
 
 		var errNew error
@@ -261,7 +262,7 @@ $$;
 	dbPort, err := strconv.Atoi(port.Port())
 	Expect(err).NotTo(HaveOccurred())
 
-	return container, config.DBConfig{
+	cfg := config.DBConfig{
 		Host:            host,
 		Port:            dbPort,
 		User:            "admin",
@@ -274,6 +275,21 @@ $$;
 		MigrationsPath:  "file://" + filepath.Join(authServiceRoot(), "migration", "yugabyte"),
 		MigrationsTable: "schema_migrations_auth_service",
 	}
+
+	Eventually(func() error {
+		dbx, openErr := pkgdb.Open(cfg)
+		if openErr != nil {
+			return openErr
+		}
+		defer dbx.Close()
+		if pingErr := dbx.Ping(); pingErr != nil {
+			return pingErr
+		}
+		var one int
+		return dbx.Get(&one, `SELECT 1`)
+	}, 3*time.Minute, 2*time.Second).Should(Succeed())
+
+	return container, cfg
 }
 
 func authServiceRoot() string {

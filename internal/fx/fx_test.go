@@ -165,7 +165,7 @@ var _ = Describe("fx providers and invokes", func() {
 	It("constructs the application service", func() {
 		repo := NewMockAuthRepository(ctrl)
 
-		svc, err := ProvideAuthService(repo, logger)
+		svc, err := ProvideAuthService(repo, cfg, logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(svc).NotTo(BeNil())
 	})

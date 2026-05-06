@@ -77,6 +77,101 @@ var _ = Describe("gRPC server", func() {
 		Expect(err.Error()).To(ContainSubstring("internal server error"))
 	})
 
+	It("verifies registration emails", func() {
+		srvAny, err := NewServer(svc, config.GRPCConfig{}, logger)
+		Expect(err).NotTo(HaveOccurred())
+		srv := srvAny.(*server)
+
+		svc.EXPECT().VerifyRegistrationEmail(gomock.Any(), "user-1", "123456").Return(&auth.RegistrationEmailVerificationResult{
+			UserID: "user-1",
+			Email:  "user@example.com",
+			Status: "verified",
+		}, nil)
+
+		resp, err := srv.VerifyRegistrationEmail(context.Background(), &authv1.VerifyRegistrationEmailRequest{
+			UserId: "user-1",
+			Code:   "123456",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.GetUserId()).To(Equal("user-1"))
+		Expect(resp.GetEmail()).To(Equal("user@example.com"))
+		Expect(resp.GetStatus()).To(Equal("verified"))
+	})
+
+	It("maps registration-email failures to invalid argument", func() {
+		srvAny, err := NewServer(svc, config.GRPCConfig{}, logger)
+		Expect(err).NotTo(HaveOccurred())
+		srv := srvAny.(*server)
+
+		svc.EXPECT().VerifyRegistrationEmail(gomock.Any(), "user-1", "123456").Return(nil, auth.ErrInvalidVerificationCode)
+
+		resp, err := srv.VerifyRegistrationEmail(context.Background(), &authv1.VerifyRegistrationEmailRequest{
+			UserId: "user-1",
+			Code:   "123456",
+		})
+		Expect(resp).To(BeNil())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("invalid registration email verification"))
+	})
+
+	It("issues registration tokens", func() {
+		srvAny, err := NewServer(svc, config.GRPCConfig{}, logger)
+		Expect(err).NotTo(HaveOccurred())
+		srv := srvAny.(*server)
+
+		svc.EXPECT().IssueRegistrationTokens(gomock.Any(), "user-1").Return(&auth.TokenPair{
+			UserID:       "user-1",
+			AccessToken:  "access",
+			RefreshToken: "refresh",
+			TokenType:    "Bearer",
+			ExpiresIn:    900,
+		}, nil)
+
+		resp, err := srv.IssueRegistrationTokens(context.Background(), &authv1.IssueRegistrationTokensRequest{UserId: "user-1"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.GetAccessToken()).To(Equal("access"))
+		Expect(resp.GetRefreshToken()).To(Equal("refresh"))
+		Expect(resp.GetTokenType()).To(Equal("Bearer"))
+		Expect(resp.GetExpiresIn()).To(Equal(int64(900)))
+	})
+
+	It("maps token issuance failures", func() {
+		srvAny, err := NewServer(svc, config.GRPCConfig{}, logger)
+		Expect(err).NotTo(HaveOccurred())
+		srv := srvAny.(*server)
+
+		svc.EXPECT().IssueRegistrationTokens(gomock.Any(), "user-1").Return(nil, auth.ErrEmailNotVerified)
+
+		resp, err := srv.IssueRegistrationTokens(context.Background(), &authv1.IssueRegistrationTokensRequest{UserId: "user-1"})
+		Expect(resp).To(BeNil())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("registration tokens unavailable"))
+	})
+
+	It("deactivates registration auth", func() {
+		srvAny, err := NewServer(svc, config.GRPCConfig{}, logger)
+		Expect(err).NotTo(HaveOccurred())
+		srv := srvAny.(*server)
+
+		svc.EXPECT().DeactivateRegistrationAuth(gomock.Any(), "user-1").Return(nil)
+		resp, err := srv.DeactivateRegistrationAuth(context.Background(), &authv1.DeactivateRegistrationAuthRequest{UserId: "user-1"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.GetUserId()).To(Equal("user-1"))
+		Expect(resp.GetStatus()).To(Equal("registration_failed"))
+	})
+
+	It("maps deactivation failures", func() {
+		srvAny, err := NewServer(svc, config.GRPCConfig{}, logger)
+		Expect(err).NotTo(HaveOccurred())
+		srv := srvAny.(*server)
+
+		svc.EXPECT().DeactivateRegistrationAuth(gomock.Any(), "user-1").Return(auth.ErrFailedToDeactivateCredential)
+		resp, err := srv.DeactivateRegistrationAuth(context.Background(), &authv1.DeactivateRegistrationAuthRequest{UserId: "user-1"})
+		Expect(resp).To(BeNil())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to deactivate registration auth"))
+	})
+
 	It("shuts down safely without a listener", func() {
 		srvAny, err := NewServer(svc, config.GRPCConfig{}, logger)
 		Expect(err).NotTo(HaveOccurred())

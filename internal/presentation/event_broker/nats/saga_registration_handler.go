@@ -11,7 +11,7 @@ func (s *registrationSagaSubscriber) handleCreateAuthCommand(ctx context.Context
 		return WrapUnmarshalCreateAuthCommandError(err)
 	}
 
-	result, err := s.service.CreatePendingRegistration(ctx, cmd.UserID, cmd.Email, cmd.PasswordHash)
+	result, err := s.service.CreatePendingRegistration(ctx, cmd.UserID, cmd.Email, cmd.Username, cmd.PasswordHash)
 	if err != nil {
 		return s.publishCreateFailureResult(ctx, cmd, err)
 	}

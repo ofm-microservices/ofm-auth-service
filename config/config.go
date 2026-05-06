@@ -11,6 +11,7 @@ type Config struct {
 	DB   DBConfig
 	GRPC GRPCConfig
 	NATS NATSConfig
+	JWT  JWTConfig
 }
 
 // Load reads environment variables into Config and applies defaults.

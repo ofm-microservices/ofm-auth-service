@@ -48,6 +48,20 @@ var _ = Describe("PgErrorTranslator", func() {
 		})
 		Expect(err).To(MatchError(auth.ErrInvalidUserID))
 
+		err = translator.TranslateCreateCredentialError(&pgconn.PgError{
+			Code:           pgerrcode.UniqueViolation,
+			Message:        `duplicate key value violates unique constraint "auth_credentials_pkey"`,
+		})
+		Expect(err).To(MatchError(auth.ErrAuthCredentialsAlreadyExist))
+
+		err = translator.TranslateVerifyEmailError(sql.ErrNoRows)
+		Expect(err).To(MatchError(auth.ErrInvalidVerificationCode))
+
+		err = translator.TranslateVerifyEmailError(&pgconn.PgError{
+			Code: pgerrcode.InvalidTextRepresentation,
+		})
+		Expect(err).To(MatchError(auth.ErrInvalidUserID))
+
 		err = translator.TranslateCreateVerificationCodeError(&pgconn.PgError{
 			Code: pgerrcode.InvalidTextRepresentation,
 		})
@@ -68,5 +82,8 @@ var _ = Describe("PgErrorTranslator", func() {
 	It("wraps generic credential and verification failures", func() {
 		Expect(translator.TranslateCreateCredentialError(errors.New("boom"))).To(MatchError(ContainSubstring("failed to create auth credential")))
 		Expect(translator.TranslateCreateVerificationCodeError(errors.New("boom"))).To(MatchError(ContainSubstring("failed to create verification code")))
+		Expect(translator.TranslateCreateRefreshTokenError(&pgconn.PgError{Code: pgerrcode.InvalidTextRepresentation})).To(MatchError(auth.ErrInvalidUserID))
+		Expect(translator.TranslateCreateRefreshTokenError(&pgconn.PgError{Code: pgerrcode.ForeignKeyViolation})).To(MatchError(auth.ErrAuthNotFound))
+		Expect(translator.TranslateCreateRefreshTokenError(errors.New("boom"))).To(MatchError(ContainSubstring("failed to create refresh token")))
 	})
 })

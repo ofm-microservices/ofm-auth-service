@@ -81,3 +81,47 @@ func (s *server) ExistsByEmail(ctx context.Context, req *authv1.ExistsByEmailReq
 
 	return &authv1.ExistsByEmailResponse{Exists: exists}, nil
 }
+
+// VerifyRegistrationEmail verifies the pending registration email code.
+func (s *server) VerifyRegistrationEmail(ctx context.Context, req *authv1.VerifyRegistrationEmailRequest) (*authv1.VerifyRegistrationEmailResponse, error) {
+	result, err := s.svc.VerifyRegistrationEmail(ctx, req.GetUserId(), req.GetCode())
+	if err != nil {
+		s.log.Error("verify registration email failed", logging.Err(err))
+		return nil, status.Error(codes.InvalidArgument, "invalid registration email verification")
+	}
+
+	return &authv1.VerifyRegistrationEmailResponse{
+		UserId: result.UserID,
+		Email:  result.Email,
+		Status: result.Status,
+	}, nil
+}
+
+// IssueRegistrationTokens creates the final login tokens for a completed
+// registration.
+func (s *server) IssueRegistrationTokens(ctx context.Context, req *authv1.IssueRegistrationTokensRequest) (*authv1.IssueRegistrationTokensResponse, error) {
+	tokens, err := s.svc.IssueRegistrationTokens(ctx, req.GetUserId())
+	if err != nil {
+		s.log.Error("issue registration tokens failed", logging.Err(err))
+		return nil, status.Error(codes.FailedPrecondition, "registration tokens unavailable")
+	}
+
+	return &authv1.IssueRegistrationTokensResponse{
+		UserId:       tokens.UserID,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		TokenType:    tokens.TokenType,
+		ExpiresIn:    tokens.ExpiresIn,
+	}, nil
+}
+
+// DeactivateRegistrationAuth marks auth registration data inactive for saga
+// compensation.
+func (s *server) DeactivateRegistrationAuth(ctx context.Context, req *authv1.DeactivateRegistrationAuthRequest) (*authv1.DeactivateRegistrationAuthResponse, error) {
+	if err := s.svc.DeactivateRegistrationAuth(ctx, req.GetUserId()); err != nil {
+		s.log.Error("deactivate registration auth failed", logging.Err(err))
+		return nil, status.Error(codes.Internal, "failed to deactivate registration auth")
+	}
+
+	return &authv1.DeactivateRegistrationAuthResponse{UserId: req.GetUserId(), Status: "registration_failed"}, nil
+}
