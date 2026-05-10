@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
 )
 
 type repo struct {
@@ -28,6 +29,12 @@ func New(db *sqlx.DB, translator DBErrorTranslator) (domain.AuthRepository, erro
 }
 
 func (r *repo) Create(ctx context.Context, params domain.CreateCredentialParams) (*domain.Credential, error) {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "create", "auth_credentials", status, time.Since(started))
+	}()
+
 	var row model.CredentialRow
 	if err := r.db.QueryRowContext(
 		ctx,
@@ -46,6 +53,7 @@ func (r *repo) Create(ctx context.Context, params domain.CreateCredentialParams)
 		&row.CreatedAt,
 		&row.UpdatedAt,
 	); err != nil {
+		status = "error"
 		return nil, r.translator.TranslateCreateCredentialError(err)
 	}
 
@@ -53,6 +61,12 @@ func (r *repo) Create(ctx context.Context, params domain.CreateCredentialParams)
 }
 
 func (r *repo) CreateVerificationCode(ctx context.Context, params domain.CreateVerificationCodeParams) error {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "create", "email_verification_codes", status, time.Since(started))
+	}()
+
 	if _, err := r.db.ExecContext(
 		ctx,
 		createVerificationCodeQuery,
@@ -61,6 +75,7 @@ func (r *repo) CreateVerificationCode(ctx context.Context, params domain.CreateV
 		params.TokenHash,
 		params.ExpiresAt,
 	); err != nil {
+		status = "error"
 		return r.translator.TranslateCreateVerificationCodeError(err)
 	}
 
@@ -68,6 +83,12 @@ func (r *repo) CreateVerificationCode(ctx context.Context, params domain.CreateV
 }
 
 func (r *repo) VerifyRegistrationEmail(ctx context.Context, userID, tokenHash string, now time.Time) (*domain.Credential, error) {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "verify_registration_email", "auth_credentials", status, time.Since(started))
+	}()
+
 	var row model.CredentialRow
 	if err := r.db.QueryRowContext(ctx, verifyRegistrationEmailQuery, userID, tokenHash, now).Scan(
 		&row.UserID,
@@ -79,6 +100,7 @@ func (r *repo) VerifyRegistrationEmail(ctx context.Context, userID, tokenHash st
 		&row.CreatedAt,
 		&row.UpdatedAt,
 	); err != nil {
+		status = "error"
 		return nil, r.translator.TranslateVerifyEmailError(err)
 	}
 
@@ -86,6 +108,12 @@ func (r *repo) VerifyRegistrationEmail(ctx context.Context, userID, tokenHash st
 }
 
 func (r *repo) CreateRefreshToken(ctx context.Context, params domain.CreateRefreshTokenParams) error {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "create", "refresh_tokens", status, time.Since(started))
+	}()
+
 	if _, err := r.db.ExecContext(
 		ctx,
 		createRefreshTokenQuery,
@@ -94,6 +122,7 @@ func (r *repo) CreateRefreshToken(ctx context.Context, params domain.CreateRefre
 		params.TokenHash,
 		params.ExpiresAt,
 	); err != nil {
+		status = "error"
 		return r.translator.TranslateCreateRefreshTokenError(err)
 	}
 
@@ -101,6 +130,12 @@ func (r *repo) CreateRefreshToken(ctx context.Context, params domain.CreateRefre
 }
 
 func (r *repo) GetByUserID(ctx context.Context, userID string) (*domain.Credential, error) {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "get_by_user_id", "auth_credentials", status, time.Since(started))
+	}()
+
 	var row model.CredentialRow
 	if err := r.db.QueryRowContext(ctx, getCredentialByUserIDQuery, userID).Scan(
 		&row.UserID,
@@ -112,6 +147,7 @@ func (r *repo) GetByUserID(ctx context.Context, userID string) (*domain.Credenti
 		&row.CreatedAt,
 		&row.UpdatedAt,
 	); err != nil {
+		status = "error"
 		return nil, r.translator.TranslateFindCredentialError(err)
 	}
 
@@ -119,8 +155,15 @@ func (r *repo) GetByUserID(ctx context.Context, userID string) (*domain.Credenti
 }
 
 func (r *repo) ExistsByEmail(ctx context.Context, email string) (bool, error) {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "exists_by_email", "auth_credentials", status, time.Since(started))
+	}()
+
 	var exists bool
 	if err := r.db.QueryRowContext(ctx, existsCredentialByEmailQuery, email).Scan(&exists); err != nil {
+		status = "error"
 		return false, domain.ErrFailedToFindCredential
 	}
 
@@ -128,16 +171,25 @@ func (r *repo) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 }
 
 func (r *repo) DeactivateRegistrationAuth(ctx context.Context, userID string) error {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "deactivate_registration_auth", "auth_credentials", status, time.Since(started))
+	}()
+
 	result, err := r.db.ExecContext(ctx, deactivateRegistrationAuthQuery, userID)
 	if err != nil {
+		status = "error"
 		return r.translator.TranslateDeactivateCredentialError(err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
+		status = "error"
 		return r.translator.TranslateDeactivateCredentialError(err)
 	}
 	if rowsAffected == 0 {
+		status = "error"
 		return domain.ErrAuthNotFound
 	}
 
@@ -145,16 +197,25 @@ func (r *repo) DeactivateRegistrationAuth(ctx context.Context, userID string) er
 }
 
 func (r *repo) DeleteByUserID(ctx context.Context, userID string) error {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "delete_by_user_id", "auth_credentials", status, time.Since(started))
+	}()
+
 	result, err := r.db.ExecContext(ctx, deleteCredentialByUserIDQuery, userID)
 	if err != nil {
+		status = "error"
 		return r.translator.TranslateDeleteCredentialError(err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
+		status = "error"
 		return r.translator.TranslateDeleteCredentialError(err)
 	}
 	if rowsAffected == 0 {
+		status = "error"
 		return domain.ErrAuthNotFound
 	}
 

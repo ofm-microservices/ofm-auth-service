@@ -7,11 +7,12 @@ import (
 
 // Config groups the full auth-service runtime configuration.
 type Config struct {
-	App  AppConfig
-	DB   DBConfig
-	GRPC GRPCConfig
-	NATS NATSConfig
-	JWT  JWTConfig
+	App     AppConfig
+	DB      DBConfig
+	GRPC    GRPCConfig
+	Metrics MetricsConfig
+	NATS    NATSConfig
+	JWT     JWTConfig
 }
 
 // Load reads environment variables into Config and applies defaults.

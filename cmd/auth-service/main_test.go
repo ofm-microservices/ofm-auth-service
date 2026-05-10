@@ -18,8 +18,8 @@ func TestMain(t *testing.T) {
 	called := false
 	run = func(opts ...fx.Option) {
 		called = true
-		if len(opts) != 8 {
-			t.Fatalf("expected 8 fx modules, got %d", len(opts))
+		if len(opts) != 9 {
+			t.Fatalf("expected 9 fx modules, got %d", len(opts))
 		}
 	}
 

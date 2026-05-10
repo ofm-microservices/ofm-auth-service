@@ -47,7 +47,7 @@ var _ = Describe("Load", func() {
 		Expect(os.Setenv("DB_PASSWORD", "admin")).To(Succeed())
 		Expect(os.Setenv("DB_NAME", "auth_service")).To(Succeed())
 		Expect(os.Setenv("GRPC_HOST", "127.0.0.1")).To(Succeed())
-		Expect(os.Setenv("GRPC_PORT", "9191")).To(Succeed())
+		Expect(os.Setenv("GRPC_PORT", "9501")).To(Succeed())
 		Expect(os.Setenv("NATS_URL", "nats://127.0.0.1:4222")).To(Succeed())
 
 		cfg, err := Load()
@@ -61,7 +61,7 @@ var _ = Describe("Load", func() {
 		Expect(cfg.DB.Password).To(Equal("admin"))
 		Expect(cfg.DB.Name).To(Equal("auth_service"))
 		Expect(cfg.GRPC.Host).To(Equal("127.0.0.1"))
-		Expect(cfg.GRPC.Port).To(Equal(9191))
+		Expect(cfg.GRPC.Port).To(Equal(9501))
 		Expect(cfg.NATS.URL).To(Equal("nats://127.0.0.1:4222"))
 		Expect(cfg.NATS.SagaBatchSize).To(Equal(32))
 	})
