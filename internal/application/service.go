@@ -130,7 +130,7 @@ func (s *authService) CreatePendingRegistration(ctx context.Context, userID, ema
 	}
 	expiresAt := time.Now().UTC().Add(10 * time.Minute)
 	if err := s.repo.CreateVerificationCode(ctx, auth.CreateVerificationCodeParams{
-		ID:        uuid.NewString(),
+		ID:        uuid.Must(uuid.NewV7()).String(),
 		UserID:    userID,
 		TokenHash: hashVerificationCode(code),
 		ExpiresAt: expiresAt,
@@ -199,7 +199,7 @@ func (s *authService) IssueRegistrationTokens(ctx context.Context, userID string
 	}
 
 	if err := s.repo.CreateRefreshToken(ctx, auth.CreateRefreshTokenParams{
-		ID:        uuid.NewString(),
+		ID:        uuid.Must(uuid.NewV7()).String(),
 		UserID:    credential.UserID,
 		TokenHash: hashVerificationCode(refreshToken),
 		ExpiresAt: now.Add(s.cfg.RefreshTokenTTL),

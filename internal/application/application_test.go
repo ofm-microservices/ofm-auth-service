@@ -10,6 +10,7 @@ import (
 
 	"auth-service/config"
 	auth "auth-service/internal/domain"
+	"github.com/google/uuid"
 	"github.com/ofm-microseervices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -204,6 +205,9 @@ var _ = Describe("AuthService", func() {
 				CreateVerificationCode(gomock.Any(), gomock.AssignableToTypeOf(auth.CreateVerificationCodeParams{})).
 				DoAndReturn(func(_ context.Context, params auth.CreateVerificationCodeParams) error {
 					Expect(params.ID).NotTo(BeEmpty())
+					parsed, err := uuid.Parse(params.ID)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(parsed.Version()).To(Equal(uuid.Version(7)))
 					Expect(params.UserID).To(Equal("user-1"))
 					Expect(params.TokenHash).To(HaveLen(64))
 					Expect(params.ExpiresAt.IsZero()).To(BeFalse())
@@ -360,6 +364,9 @@ var _ = Describe("AuthService", func() {
 			repo.EXPECT().CreateRefreshToken(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, params auth.CreateRefreshTokenParams) error {
 					Expect(params.ID).NotTo(BeEmpty())
+					parsed, err := uuid.Parse(params.ID)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(parsed.Version()).To(Equal(uuid.Version(7)))
 					Expect(params.UserID).To(Equal("user-1"))
 					Expect(params.TokenHash).To(HaveLen(64))
 					Expect(params.ExpiresAt).To(BeTemporally(">", time.Now().UTC().Add(time.Second)))
