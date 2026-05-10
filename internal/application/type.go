@@ -3,7 +3,7 @@ package service
 import (
 	"auth-service/internal/domain"
 	"context"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 )
 
 // AuthService owns auth credential creation, pending-registration setup, and

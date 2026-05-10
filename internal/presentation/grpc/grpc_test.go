@@ -9,8 +9,8 @@ import (
 
 	"auth-service/config"
 	auth "auth-service/internal/domain"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
-	authv1 "github.com/ofm-microseervices/ofm-common/proto/auth/v1"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	authv1 "github.com/ofm-microservices/ofm-common/proto/auth/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"

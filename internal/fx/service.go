@@ -4,7 +4,7 @@ import (
 	"auth-service/config"
 	app "auth-service/internal/application"
 	auth "auth-service/internal/domain"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 
 	"go.uber.org/fx"
 )

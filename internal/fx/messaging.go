@@ -6,7 +6,7 @@ import (
 	broker "auth-service/internal/presentation/event_broker/nats"
 	natsbootstrap "auth-service/pkg/messaging/nats"
 	"context"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 
 	"go.uber.org/fx"
 )

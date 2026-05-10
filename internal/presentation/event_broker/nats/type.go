@@ -6,7 +6,7 @@ import (
 	"context"
 
 	"github.com/nats-io/nats.go"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 )
 
 // RegistrationSagaSubscriber consumes auth-related saga commands from NATS.
