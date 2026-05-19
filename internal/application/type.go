@@ -16,6 +16,8 @@ type AuthService interface {
 	CreatePendingRegistration(ctx context.Context, userID, email, username, passwordHash string) (*auth.PendingRegistrationResult, error)
 	// ExistsByEmail reports whether auth-service already owns the supplied email.
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
+	// GetEmailByUserID returns the stored email for one user.
+	GetEmailByUserID(ctx context.Context, userID string) (string, error)
 	// VerifyRegistrationEmail verifies the email code for pending registration.
 	VerifyRegistrationEmail(ctx context.Context, userID, code string) (*auth.RegistrationEmailVerificationResult, error)
 	// IssueRegistrationTokens creates auth-owned login tokens after saga completion.

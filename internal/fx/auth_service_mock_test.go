@@ -114,6 +114,21 @@ func (mr *MockAuthServiceMockRecorder) ExistsByEmail(ctx, email any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExistsByEmail", reflect.TypeOf((*MockAuthService)(nil).ExistsByEmail), ctx, email)
 }
 
+// GetEmailByUserID mocks base method.
+func (m *MockAuthService) GetEmailByUserID(ctx context.Context, userID string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEmailByUserID", ctx, userID)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEmailByUserID indicates an expected call of GetEmailByUserID.
+func (mr *MockAuthServiceMockRecorder) GetEmailByUserID(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEmailByUserID", reflect.TypeOf((*MockAuthService)(nil).GetEmailByUserID), ctx, userID)
+}
+
 // IssueRegistrationTokens mocks base method.
 func (m *MockAuthService) IssueRegistrationTokens(ctx context.Context, userID string) (*auth.TokenPair, error) {
 	m.ctrl.T.Helper()

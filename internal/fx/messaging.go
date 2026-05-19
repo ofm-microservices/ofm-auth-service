@@ -11,7 +11,8 @@ import (
 	"go.uber.org/fx"
 )
 
-// MessagingModule wires NATS bootstrap and broker runtime into auth-service.
+// MessagingModule wires JetStream bootstrap and the NATS broker runtime into
+// auth-service.
 var MessagingModule = fx.Options(
 	fx.Invoke(InvokeEnsureStream),
 	fx.Provide(ProvideEventBroker),

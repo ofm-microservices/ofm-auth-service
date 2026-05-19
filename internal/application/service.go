@@ -1,29 +1,29 @@
 package service
 
 import (
-	"auth-service/config"
-	auth "auth-service/internal/domain"
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"strings"
 	"time"
 
+	"auth-service/config"
+	auth "auth-service/internal/domain"
 	"github.com/google/uuid"
+	commonjwt "github.com/ofm-microservices/ofm-common/pkg/jwt"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 )
 
 const invalidCreateCredentialCommandMessage = "invalid create auth credential command"
 
 type authService struct {
-	repo AuthRepository
-	cfg  config.JWTConfig
-	log  Logger
+	repo   AuthRepository
+	cfg    config.JWTConfig
+	log    Logger
+	signer commonjwt.Signer
 }
 
 // New constructs the auth application service.
@@ -35,10 +35,16 @@ func New(repo AuthRepository, cfg config.JWTConfig, log Logger) (AuthService, er
 		return nil, ErrNilLogger
 	}
 
+	signer, err := commonjwt.NewSigner(commonjwt.Config{Secret: cfg.AccessSecret})
+	if err != nil {
+		return nil, err
+	}
+
 	return &authService{
-		repo: repo,
-		cfg:  cfg,
-		log:  log.With(logging.String("module", "application")),
+		repo:   repo,
+		cfg:    cfg,
+		log:    log.With(logging.String("module", "application")),
+		signer: signer,
 	}, nil
 }
 
@@ -113,6 +119,15 @@ func (s *authService) ExistsByEmail(ctx context.Context, email string) (bool, er
 	}
 
 	return s.repo.ExistsByEmail(ctx, strings.TrimSpace(email))
+}
+
+// GetEmailByUserID returns the stored email for one user.
+func (s *authService) GetEmailByUserID(ctx context.Context, userID string) (string, error) {
+	credential, err := s.repo.GetByUserID(ctx, strings.TrimSpace(userID))
+	if err != nil {
+		return "", err
+	}
+	return credential.Email, nil
 }
 
 // CreatePendingRegistration creates the credential and issues a verification
@@ -253,26 +268,11 @@ func generateRandomToken(bytesLen int) (string, error) {
 }
 
 func (s *authService) signAccessToken(credential *auth.Credential, now time.Time) (string, error) {
-	header, err := json.Marshal(map[string]string{"alg": "HS256", "typ": "JWT"})
-	if err != nil {
-		return "", err
-	}
-	claims, err := json.Marshal(map[string]any{
-		"sub":      credential.UserID,
-		"email":    credential.Email,
-		"username": credential.Username,
-		"iat":      now.Unix(),
-		"exp":      now.Add(s.cfg.AccessTokenTTL).Unix(),
+	return s.signer.Sign(commonjwt.Claims{
+		Subject:   credential.UserID,
+		Email:     credential.Email,
+		Username:  credential.Username,
+		IssuedAt:  now.Unix(),
+		ExpiresAt: now.Add(s.cfg.AccessTokenTTL).Unix(),
 	})
-	if err != nil {
-		return "", err
-	}
-
-	unsigned := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(claims)
-	mac := hmac.New(sha256.New, []byte(s.cfg.Secret))
-	if _, err := mac.Write([]byte(unsigned)); err != nil {
-		return "", err
-	}
-
-	return unsigned + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), nil
 }
