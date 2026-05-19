@@ -83,6 +83,16 @@ func (s *server) ExistsByEmail(ctx context.Context, req *authv1.ExistsByEmailReq
 	return &authv1.ExistsByEmailResponse{Exists: exists}, nil
 }
 
+// GetEmailByUserID returns the stored email address for one user.
+func (s *server) GetEmailByUserID(ctx context.Context, req *authv1.GetEmailByUserIDRequest) (*authv1.GetEmailByUserIDResponse, error) {
+	email, err := s.svc.GetEmailByUserID(ctx, req.GetUserId())
+	if err != nil {
+		s.log.Error("get email by user id failed", logging.Err(err))
+		return nil, status.Error(codes.NotFound, "auth credential not found")
+	}
+	return &authv1.GetEmailByUserIDResponse{UserId: req.GetUserId(), Email: email}, nil
+}
+
 // VerifyRegistrationEmail verifies the pending registration email code.
 func (s *server) VerifyRegistrationEmail(ctx context.Context, req *authv1.VerifyRegistrationEmailRequest) (*authv1.VerifyRegistrationEmailResponse, error) {
 	result, err := s.svc.VerifyRegistrationEmail(ctx, req.GetUserId(), req.GetCode())
