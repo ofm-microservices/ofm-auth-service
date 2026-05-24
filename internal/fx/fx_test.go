@@ -112,6 +112,11 @@ var _ = Describe("fx providers and invokes", func() {
 				SagaAckWait:                 time.Second,
 				SagaMaxDeliver:              1,
 			},
+			JWT: config.JWTConfig{
+				AccessSecret:  "access-secret",
+				RefreshSecret: "refresh-secret",
+				Issuer:        "ofm-auth-service",
+			},
 		}
 
 		lc = fxtest.NewLifecycle(GinkgoT())
