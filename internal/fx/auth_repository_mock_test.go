@@ -71,6 +71,21 @@ func (mr *MockAuthRepositoryMockRecorder) CreateRefreshToken(ctx, params any) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRefreshToken", reflect.TypeOf((*MockAuthRepository)(nil).CreateRefreshToken), ctx, params)
 }
 
+// RotateRefreshToken mocks base method.
+func (m *MockAuthRepository) RotateRefreshToken(ctx context.Context, params auth.RotateRefreshTokenParams) (*auth.Credential, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RotateRefreshToken", ctx, params)
+	ret0, _ := ret[0].(*auth.Credential)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RotateRefreshToken indicates an expected call of RotateRefreshToken.
+func (mr *MockAuthRepositoryMockRecorder) RotateRefreshToken(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateRefreshToken", reflect.TypeOf((*MockAuthRepository)(nil).RotateRefreshToken), ctx, params)
+}
+
 // CreateVerificationCode mocks base method.
 func (m *MockAuthRepository) CreateVerificationCode(ctx context.Context, params auth.CreateVerificationCodeParams) error {
 	m.ctrl.T.Helper()

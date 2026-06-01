@@ -279,6 +279,44 @@ func (s *authService) SignIn(ctx context.Context, identifier, password string) (
 	}, nil
 }
 
+// Refresh rotates a refresh token and returns a new token pair for the owning
+// credential.
+func (s *authService) Refresh(ctx context.Context, refreshToken string) (*auth.TokenPair, error) {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return nil, auth.ErrInvalidRefreshToken
+	}
+
+	now := time.Now().UTC()
+	newRefreshToken, err := generateRandomToken(s.cfg.RefreshTokenBytes)
+	if err != nil {
+		return nil, auth.ErrFailedToCreateRefreshToken
+	}
+	credential, err := s.repo.RotateRefreshToken(ctx, auth.RotateRefreshTokenParams{
+		CurrentTokenHash: hashVerificationCode(refreshToken),
+		NewTokenID:       uuid.Must(uuid.NewV7()).String(),
+		NewTokenHash:     hashVerificationCode(newRefreshToken),
+		NewExpiresAt:     now.Add(s.cfg.RefreshTokenTTL),
+		Now:              now,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	accessToken, err := s.signAccessToken(credential, now)
+	if err != nil {
+		return nil, err
+	}
+
+	return &auth.TokenPair{
+		UserID:       credential.UserID,
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(s.cfg.AccessTokenTTL.Seconds()),
+	}, nil
+}
+
 // DeactivateRegistrationAuth marks auth registration data inactive for
 // compensation.
 func (s *authService) DeactivateRegistrationAuth(ctx context.Context, userID string) error {

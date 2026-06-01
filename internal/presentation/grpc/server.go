@@ -3,6 +3,7 @@ package grpc
 import (
 	"auth-service/config"
 	app "auth-service/internal/application"
+	auth "auth-service/internal/domain"
 	"context"
 	"errors"
 	"fmt"
@@ -129,14 +130,38 @@ func (s *server) IssueRegistrationTokens(ctx context.Context, req *authv1.IssueR
 }
 
 // SignIn validates credentials and returns auth-owned tokens.
-func (s *server) SignIn(ctx context.Context, req *authv1.SignInRequest) (*authv1.AuthTokensResponse, error) {
+func (s *server) SignIn(ctx context.Context, req *authv1.SignInRequest) (*authv1.SignInResponse, error) {
 	tokens, err := s.svc.SignIn(ctx, req.GetIdentifier(), req.GetPassword())
 	if err != nil {
 		s.log.Error("sign in failed", logging.Err(err))
 		return nil, status.Error(codes.Unauthenticated, "invalid credentials")
 	}
 
-	return &authv1.AuthTokensResponse{
+	return &authv1.SignInResponse{
+		UserId:       tokens.UserID,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		TokenType:    tokens.TokenType,
+		ExpiresIn:    tokens.ExpiresIn,
+	}, nil
+}
+
+// Refresh rotates a refresh token and returns a new auth-owned token pair.
+func (s *server) Refresh(ctx context.Context, req *authv1.RefreshRequest) (*authv1.RefreshResponse, error) {
+	tokens, err := s.svc.Refresh(ctx, req.GetRefreshToken())
+	if err != nil {
+		s.log.Error("refresh failed", logging.Err(err))
+		switch err {
+		case auth.ErrInvalidRefreshToken:
+			return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
+		case auth.ErrRefreshTokenExpired, auth.ErrRefreshTokenRevoked, auth.ErrInvalidCredentials, auth.ErrAuthNotFound:
+			return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
+		default:
+			return nil, status.Error(codes.Internal, "internal server error")
+		}
+	}
+
+	return &authv1.RefreshResponse{
 		UserId:       tokens.UserID,
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
