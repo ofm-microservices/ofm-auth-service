@@ -14,9 +14,9 @@ import (
 
 	auth "auth-service/internal/domain"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jmoiron/sqlx"
 )
 
 func TestRepositoryBranches(t *testing.T) {
@@ -30,7 +30,7 @@ func TestRepositoryBranches(t *testing.T) {
 					}
 					return fakeRowResult{
 						columns: []string{"user_id", "email", "username", "password_hash", "email_verified", "status", "created_at", "updated_at"},
-						values: []driver.Value{"user-1", "user@example.com", "tester", "hash", true, "email_verified", time.Now(), time.Now()},
+						values:  []driver.Value{"user-1", "user@example.com", "tester", "hash", true, "email_verified", time.Now(), time.Now()},
 					}
 				default:
 					return fakeRowResult{err: sql.ErrNoRows}
@@ -65,7 +65,7 @@ func TestRepositoryBranches(t *testing.T) {
 				case strings.Contains(query, "SELECT user_id, email, username"):
 					return fakeRowResult{
 						columns: []string{"user_id", "email", "username", "password_hash", "email_verified", "status", "created_at", "updated_at"},
-						values: []driver.Value{"user-2", "user2@example.com", "tester", "hash", true, "email_verified", time.Now(), time.Now()},
+						values:  []driver.Value{"user-2", "user2@example.com", "tester", "hash", true, "email_verified", time.Now(), time.Now()},
 					}
 				case strings.Contains(query, "SELECT EXISTS"):
 					return fakeRowResult{columns: []string{"exists"}, values: []driver.Value{true}}
@@ -222,8 +222,8 @@ func (fakeDriver) Open(string) (driver.Conn, error) { return fakeConn{}, nil }
 type fakeConn struct{}
 
 func (fakeConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("prepare not supported") }
-func (fakeConn) Close() error                       { return nil }
-func (fakeConn) Begin() (driver.Tx, error)          { return nil, errors.New("tx not supported") }
+func (fakeConn) Close() error                        { return nil }
+func (fakeConn) Begin() (driver.Tx, error)           { return nil, errors.New("tx not supported") }
 
 func (fakeConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	fakeDriverMu.Lock()

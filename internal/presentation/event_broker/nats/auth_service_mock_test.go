@@ -144,6 +144,21 @@ func (mr *MockAuthServiceMockRecorder) IssueRegistrationTokens(ctx, userID any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueRegistrationTokens", reflect.TypeOf((*MockAuthService)(nil).IssueRegistrationTokens), ctx, userID)
 }
 
+// SignIn mocks base method.
+func (m *MockAuthService) SignIn(ctx context.Context, identifier, password string) (*auth.TokenPair, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SignIn", ctx, identifier, password)
+	ret0, _ := ret[0].(*auth.TokenPair)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SignIn indicates an expected call of SignIn.
+func (mr *MockAuthServiceMockRecorder) SignIn(ctx, identifier, password any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignIn", reflect.TypeOf((*MockAuthService)(nil).SignIn), ctx, identifier, password)
+}
+
 // VerifyRegistrationEmail mocks base method.
 func (m *MockAuthService) VerifyRegistrationEmail(ctx context.Context, userID, code string) (*auth.RegistrationEmailVerificationResult, error) {
 	m.ctrl.T.Helper()

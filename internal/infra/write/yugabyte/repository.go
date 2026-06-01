@@ -154,6 +154,31 @@ func (r *repo) GetByUserID(ctx context.Context, userID string) (*domain.Credenti
 	return mapper.MapCredentialRowToDomain(row), nil
 }
 
+func (r *repo) GetByIdentifier(ctx context.Context, identifier string) (*domain.Credential, error) {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "get_by_identifier", "auth_credentials", status, time.Since(started))
+	}()
+
+	var row model.CredentialRow
+	if err := r.db.QueryRowContext(ctx, getCredentialByIdentifierQuery, identifier).Scan(
+		&row.UserID,
+		&row.Email,
+		&row.Username,
+		&row.PasswordHash,
+		&row.EmailVerified,
+		&row.Status,
+		&row.CreatedAt,
+		&row.UpdatedAt,
+	); err != nil {
+		status = "error"
+		return nil, r.translator.TranslateFindCredentialError(err)
+	}
+
+	return mapper.MapCredentialRowToDomain(row), nil
+}
+
 func (r *repo) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	started := time.Now()
 	status := "success"

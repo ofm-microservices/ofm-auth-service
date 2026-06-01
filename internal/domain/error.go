@@ -13,6 +13,7 @@ var (
 	ErrAuthCredentialsAlreadyExist    = errors.New("auth credentials already exist")
 	ErrAuthNotFound                   = errors.New("auth credentials not found")
 	ErrEmailNotVerified               = errors.New("email is not verified")
+	ErrInvalidCredentials             = errors.New("invalid credentials")
 	ErrFailedToCreateCredential       = errors.New("failed to create auth credential")
 	ErrFailedToCreateVerificationCode = errors.New("failed to create verification code")
 	ErrFailedToVerifyEmail            = errors.New("failed to verify email")
