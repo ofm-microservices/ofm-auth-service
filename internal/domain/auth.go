@@ -102,6 +102,13 @@ type RotateRefreshTokenParams struct {
 	Now              time.Time
 }
 
+// RevokeRefreshTokenParams contains the data required to revoke an existing
+// refresh token without minting a replacement.
+type RevokeRefreshTokenParams struct {
+	CurrentTokenHash string
+	Now              time.Time
+}
+
 // AuthRepository persists auth-service credentials and verification codes.
 type AuthRepository interface {
 	Create(ctx context.Context, params CreateCredentialParams) (*Credential, error)
@@ -109,6 +116,7 @@ type AuthRepository interface {
 	VerifyRegistrationEmail(ctx context.Context, userID, tokenHash string, now time.Time) (*Credential, error)
 	CreateRefreshToken(ctx context.Context, params CreateRefreshTokenParams) error
 	RotateRefreshToken(ctx context.Context, params RotateRefreshTokenParams) (*Credential, error)
+	RevokeRefreshToken(ctx context.Context, params RevokeRefreshTokenParams) (*Credential, error)
 	GetByUserID(ctx context.Context, userID string) (*Credential, error)
 	GetByIdentifier(ctx context.Context, identifier string) (*Credential, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)

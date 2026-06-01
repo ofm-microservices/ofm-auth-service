@@ -170,6 +170,25 @@ func (s *server) Refresh(ctx context.Context, req *authv1.RefreshRequest) (*auth
 	}, nil
 }
 
+// SignOut revokes a refresh token and ends the session.
+func (s *server) SignOut(ctx context.Context, req *authv1.SignOutRequest) (*authv1.SignOutResponse, error) {
+	if err := s.svc.SignOut(ctx, req.GetRefreshToken()); err != nil {
+		s.log.Error("sign out failed", logging.Err(err))
+		switch err {
+		case auth.ErrInvalidRefreshToken:
+			return nil, status.Error(codes.InvalidArgument, "invalid refresh token")
+		case auth.ErrRefreshTokenExpired, auth.ErrRefreshTokenRevoked, auth.ErrInvalidCredentials, auth.ErrAuthNotFound:
+			return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
+		default:
+			return nil, status.Error(codes.Internal, "internal server error")
+		}
+	}
+
+	return &authv1.SignOutResponse{
+		Status: "signed_out",
+	}, nil
+}
+
 // DeactivateRegistrationAuth marks auth registration data inactive for saga
 // compensation.
 func (s *server) DeactivateRegistrationAuth(ctx context.Context, req *authv1.DeactivateRegistrationAuthRequest) (*authv1.DeactivateRegistrationAuthResponse, error) {

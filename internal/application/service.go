@@ -317,6 +317,23 @@ func (s *authService) Refresh(ctx context.Context, refreshToken string) (*auth.T
 	}, nil
 }
 
+// SignOut revokes a refresh token without issuing replacement credentials.
+func (s *authService) SignOut(ctx context.Context, refreshToken string) error {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return auth.ErrInvalidRefreshToken
+	}
+
+	if _, err := s.repo.RevokeRefreshToken(ctx, auth.RevokeRefreshTokenParams{
+		CurrentTokenHash: hashVerificationCode(refreshToken),
+		Now:              time.Now().UTC(),
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // DeactivateRegistrationAuth marks auth registration data inactive for
 // compensation.
 func (s *authService) DeactivateRegistrationAuth(ctx context.Context, userID string) error {

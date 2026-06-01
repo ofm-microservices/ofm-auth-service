@@ -148,8 +148,77 @@ func (r *repo) RotateRefreshToken(ctx context.Context, params domain.RotateRefre
 		}
 	}()
 
+	row, err := r.loadRefreshTokenForMutation(ctx, tx, refreshTokenForRotationQuery, params.CurrentTokenHash, params.Now)
+	if err != nil {
+		status = "error"
+		return nil, err
+	}
+
+	if _, err := tx.ExecContext(ctx, revokeRefreshTokenQuery, row.RefreshTokenID, params.Now); err != nil {
+		status = "error"
+		return nil, r.translator.TranslateRotateRefreshTokenError(err)
+	}
+
+	if _, err := tx.ExecContext(ctx, createRefreshTokenQuery, params.NewTokenID, row.Credential.UserID, params.NewTokenHash, params.NewExpiresAt); err != nil {
+		status = "error"
+		return nil, r.translator.TranslateRotateRefreshTokenError(err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		status = "error"
+		return nil, r.translator.TranslateRotateRefreshTokenError(err)
+	}
+	tx = nil
+
+	return row.Credential, nil
+}
+
+func (r *repo) RevokeRefreshToken(ctx context.Context, params domain.RevokeRefreshTokenParams) (*domain.Credential, error) {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "revoke", "refresh_tokens", status, time.Since(started))
+	}()
+
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		status = "error"
+		return nil, r.translator.TranslateRotateRefreshTokenError(err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	row, err := r.loadRefreshTokenForMutation(ctx, tx, refreshTokenForRevokeQuery, params.CurrentTokenHash, params.Now)
+	if err != nil {
+		status = "error"
+		return nil, err
+	}
+
+	if _, err := tx.ExecContext(ctx, revokeRefreshTokenQuery, row.RefreshTokenID, params.Now); err != nil {
+		status = "error"
+		return nil, r.translator.TranslateRotateRefreshTokenError(err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		status = "error"
+		return nil, r.translator.TranslateRotateRefreshTokenError(err)
+	}
+	tx = nil
+
+	return row.Credential, nil
+}
+
+type refreshTokenMutationRow struct {
+	RefreshTokenID string
+	Credential     *domain.Credential
+}
+
+func (r *repo) loadRefreshTokenForMutation(ctx context.Context, tx *sqlx.Tx, query, currentTokenHash string, now time.Time) (*refreshTokenMutationRow, error) {
 	var row model.RefreshTokenRotationRow
-	if err := tx.QueryRowContext(ctx, refreshTokenForRotationQuery, params.CurrentTokenHash).Scan(
+	if err := tx.QueryRowContext(ctx, query, currentTokenHash).Scan(
 		&row.RefreshTokenID,
 		&row.RefreshTokenUserID,
 		&row.RefreshTokenHash,
@@ -164,48 +233,19 @@ func (r *repo) RotateRefreshToken(ctx context.Context, params domain.RotateRefre
 		&row.CreatedAt,
 		&row.UpdatedAt,
 	); err != nil {
-		status = "error"
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrInvalidRefreshToken
 		}
 		return nil, r.translator.TranslateRotateRefreshTokenError(err)
 	}
 	if row.RefreshTokenRevokedAt.Valid {
-		status = "error"
 		return nil, domain.ErrRefreshTokenRevoked
 	}
-	if !row.RefreshTokenExpiry.After(params.Now) {
-		status = "error"
+	if !row.RefreshTokenExpiry.After(now) {
 		return nil, domain.ErrRefreshTokenExpired
 	}
 
-	result, err := tx.ExecContext(ctx, revokeRefreshTokenQuery, row.RefreshTokenID, params.Now)
-	if err != nil {
-		status = "error"
-		return nil, r.translator.TranslateRotateRefreshTokenError(err)
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		status = "error"
-		return nil, r.translator.TranslateRotateRefreshTokenError(err)
-	}
-	if rowsAffected == 0 {
-		status = "error"
-		return nil, domain.ErrRefreshTokenRevoked
-	}
-
-	if _, err := tx.ExecContext(ctx, createRefreshTokenQuery, params.NewTokenID, row.CredentialUserID, params.NewTokenHash, params.NewExpiresAt); err != nil {
-		status = "error"
-		return nil, r.translator.TranslateRotateRefreshTokenError(err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		status = "error"
-		return nil, r.translator.TranslateRotateRefreshTokenError(err)
-	}
-	tx = nil
-
-	return mapper.MapCredentialRowToDomain(model.CredentialRow{
+	credential := mapper.MapCredentialRowToDomain(model.CredentialRow{
 		UserID:        row.CredentialUserID,
 		Email:         row.Email,
 		Username:      row.Username,
@@ -214,7 +254,12 @@ func (r *repo) RotateRefreshToken(ctx context.Context, params domain.RotateRefre
 		Status:        row.Status,
 		CreatedAt:     row.CreatedAt,
 		UpdatedAt:     row.UpdatedAt,
-	}), nil
+	})
+
+	return &refreshTokenMutationRow{
+		RefreshTokenID: row.RefreshTokenID,
+		Credential:     credential,
+	}, nil
 }
 
 func (r *repo) GetByUserID(ctx context.Context, userID string) (*domain.Credential, error) {

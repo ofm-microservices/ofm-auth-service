@@ -22,6 +22,7 @@ var (
 	ErrFailedToVerifyEmail            = errors.New("failed to verify email")
 	ErrFailedToCreateRefreshToken     = errors.New("failed to create refresh token")
 	ErrFailedToRotateRefreshToken     = errors.New("failed to rotate refresh token")
+	ErrFailedToRevokeRefreshToken     = errors.New("failed to revoke refresh token")
 	ErrFailedToFindCredential         = errors.New("failed to find auth credential")
 	ErrFailedToDeactivateCredential   = errors.New("failed to deactivate auth credential")
 	ErrFailedToDeleteCredential       = errors.New("failed to delete auth credential")
