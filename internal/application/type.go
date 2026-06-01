@@ -22,6 +22,8 @@ type AuthService interface {
 	VerifyRegistrationEmail(ctx context.Context, userID, code string) (*auth.RegistrationEmailVerificationResult, error)
 	// IssueRegistrationTokens creates auth-owned login tokens after saga completion.
 	IssueRegistrationTokens(ctx context.Context, userID string) (*auth.TokenPair, error)
+	// SignIn validates a username or email plus password and issues auth-owned tokens.
+	SignIn(ctx context.Context, identifier, password string) (*auth.TokenPair, error)
 	// DeactivateRegistrationAuth marks registration auth data inactive for compensation.
 	DeactivateRegistrationAuth(ctx context.Context, userID string) error
 	// DeleteCredential removes auth data for compensation flows.

@@ -48,6 +48,13 @@ const (
 		WHERE user_id = $1
 	`
 
+	getCredentialByIdentifierQuery = `
+		SELECT user_id, email, username, password_hash, email_verified, status, created_at, updated_at
+		FROM auth_credentials
+		WHERE username = $1 OR email = $1
+		LIMIT 1
+	`
+
 	existsCredentialByEmailQuery = `
 		SELECT EXISTS (
 			SELECT 1

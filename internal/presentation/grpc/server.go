@@ -18,6 +18,7 @@ import (
 
 type server struct {
 	authv1.UnimplementedAuthQueryServiceServer
+	authv1.UnimplementedAuthSessionServiceServer
 	svc      app.AuthService
 	cfg      config.GRPCConfig
 	log      logging.Logger
@@ -42,6 +43,7 @@ func NewServer(svc app.AuthService, cfg config.GRPCConfig, log logging.Logger) (
 		srv: grpcSrv,
 	}
 	authv1.RegisterAuthQueryServiceServer(grpcSrv, s)
+	authv1.RegisterAuthSessionServiceServer(grpcSrv, s)
 	return s, nil
 }
 
@@ -118,6 +120,23 @@ func (s *server) IssueRegistrationTokens(ctx context.Context, req *authv1.IssueR
 	}
 
 	return &authv1.IssueRegistrationTokensResponse{
+		UserId:       tokens.UserID,
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		TokenType:    tokens.TokenType,
+		ExpiresIn:    tokens.ExpiresIn,
+	}, nil
+}
+
+// SignIn validates credentials and returns auth-owned tokens.
+func (s *server) SignIn(ctx context.Context, req *authv1.SignInRequest) (*authv1.AuthTokensResponse, error) {
+	tokens, err := s.svc.SignIn(ctx, req.GetIdentifier(), req.GetPassword())
+	if err != nil {
+		s.log.Error("sign in failed", logging.Err(err))
+		return nil, status.Error(codes.Unauthenticated, "invalid credentials")
+	}
+
+	return &authv1.AuthTokensResponse{
 		UserId:       tokens.UserID,
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,

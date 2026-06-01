@@ -89,6 +89,7 @@ type AuthRepository interface {
 	VerifyRegistrationEmail(ctx context.Context, userID, tokenHash string, now time.Time) (*Credential, error)
 	CreateRefreshToken(ctx context.Context, params CreateRefreshTokenParams) error
 	GetByUserID(ctx context.Context, userID string) (*Credential, error)
+	GetByIdentifier(ctx context.Context, identifier string) (*Credential, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
 	DeactivateRegistrationAuth(ctx context.Context, userID string) error
 	DeleteByUserID(ctx context.Context, userID string) error

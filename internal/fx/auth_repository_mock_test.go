@@ -143,6 +143,21 @@ func (mr *MockAuthRepositoryMockRecorder) GetByUserID(ctx, userID any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByUserID", reflect.TypeOf((*MockAuthRepository)(nil).GetByUserID), ctx, userID)
 }
 
+// GetByIdentifier mocks base method.
+func (m *MockAuthRepository) GetByIdentifier(ctx context.Context, identifier string) (*auth.Credential, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByIdentifier", ctx, identifier)
+	ret0, _ := ret[0].(*auth.Credential)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByIdentifier indicates an expected call of GetByIdentifier.
+func (mr *MockAuthRepositoryMockRecorder) GetByIdentifier(ctx, identifier any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByIdentifier", reflect.TypeOf((*MockAuthRepository)(nil).GetByIdentifier), ctx, identifier)
+}
+
 // VerifyRegistrationEmail mocks base method.
 func (m *MockAuthRepository) VerifyRegistrationEmail(ctx context.Context, userID, tokenHash string, now time.Time) (*auth.Credential, error) {
 	m.ctrl.T.Helper()

@@ -49,8 +49,8 @@ var _ = Describe("PgErrorTranslator", func() {
 		Expect(err).To(MatchError(auth.ErrInvalidUserID))
 
 		err = translator.TranslateCreateCredentialError(&pgconn.PgError{
-			Code:           pgerrcode.UniqueViolation,
-			Message:        `duplicate key value violates unique constraint "auth_credentials_pkey"`,
+			Code:    pgerrcode.UniqueViolation,
+			Message: `duplicate key value violates unique constraint "auth_credentials_pkey"`,
 		})
 		Expect(err).To(MatchError(auth.ErrAuthCredentialsAlreadyExist))
 

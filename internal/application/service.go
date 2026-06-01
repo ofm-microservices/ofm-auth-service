@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	commonjwt "github.com/ofm-microservices/ofm-common/pkg/jwt"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const invalidCreateCredentialCommandMessage = "invalid create auth credential command"
@@ -201,6 +202,53 @@ func (s *authService) IssueRegistrationTokens(ctx context.Context, userID string
 	}
 	if credential.Status != auth.CredentialStatusEmailVerified {
 		return nil, auth.ErrEmailNotVerified
+	}
+
+	now := time.Now().UTC()
+	accessToken, err := s.signAccessToken(credential, now)
+	if err != nil {
+		return nil, err
+	}
+	refreshToken, err := generateRandomToken(s.cfg.RefreshTokenBytes)
+	if err != nil {
+		return nil, auth.ErrFailedToCreateRefreshToken
+	}
+
+	if err := s.repo.CreateRefreshToken(ctx, auth.CreateRefreshTokenParams{
+		ID:        uuid.Must(uuid.NewV7()).String(),
+		UserID:    credential.UserID,
+		TokenHash: hashVerificationCode(refreshToken),
+		ExpiresAt: now.Add(s.cfg.RefreshTokenTTL),
+	}); err != nil {
+		return nil, err
+	}
+
+	return &auth.TokenPair{
+		UserID:       credential.UserID,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(s.cfg.AccessTokenTTL.Seconds()),
+	}, nil
+}
+
+// SignIn validates a stored credential against a username-or-email identifier
+// and returns auth-owned tokens.
+func (s *authService) SignIn(ctx context.Context, identifier, password string) (*auth.TokenPair, error) {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" || strings.TrimSpace(password) == "" {
+		return nil, auth.ErrInvalidCredentials
+	}
+
+	credential, err := s.repo.GetByIdentifier(ctx, identifier)
+	if err != nil {
+		return nil, auth.ErrInvalidCredentials
+	}
+	if !credential.EmailVerified || credential.Status != auth.CredentialStatusEmailVerified {
+		return nil, auth.ErrInvalidCredentials
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(credential.PasswordHash), []byte(password)); err != nil {
+		return nil, auth.ErrInvalidCredentials
 	}
 
 	now := time.Now().UTC()
