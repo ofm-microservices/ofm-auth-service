@@ -7,6 +7,7 @@ type DBErrorTranslator interface {
 	TranslateCreateVerificationCodeError(err error) error
 	TranslateVerifyEmailError(err error) error
 	TranslateCreateRefreshTokenError(err error) error
+	TranslateRotateRefreshTokenError(err error) error
 	TranslateFindCredentialError(err error) error
 	TranslateDeactivateCredentialError(err error) error
 	TranslateDeleteCredentialError(err error) error

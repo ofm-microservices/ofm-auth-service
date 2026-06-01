@@ -91,6 +91,20 @@ func (t *PgErrorTranslator) TranslateCreateRefreshTokenError(err error) error {
 	return auth.ErrFailedToCreateRefreshToken
 }
 
+func (t *PgErrorTranslator) TranslateRotateRefreshTokenError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case pgerrcode.InvalidTextRepresentation:
+			return auth.ErrInvalidRefreshToken
+		case pgerrcode.ForeignKeyViolation:
+			return auth.ErrAuthNotFound
+		}
+	}
+
+	return auth.ErrFailedToRotateRefreshToken
+}
+
 func (t *PgErrorTranslator) TranslateFindCredentialError(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return auth.ErrAuthNotFound

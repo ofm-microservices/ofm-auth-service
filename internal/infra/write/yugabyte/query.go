@@ -42,6 +42,33 @@ const (
 		VALUES ($1, $2, $3, $4)
 	`
 
+	refreshTokenForRotationQuery = `
+		SELECT rt.id,
+		       rt.user_id AS refresh_user_id,
+		       rt.token_hash,
+		       rt.expires_at,
+		       rt.revoked_at,
+		       ac.user_id AS credential_user_id,
+		       ac.email,
+		       ac.username,
+		       ac.password_hash,
+		       ac.email_verified,
+		       ac.status,
+		       ac.created_at,
+		       ac.updated_at
+		FROM refresh_tokens rt
+		JOIN auth_credentials ac ON ac.user_id = rt.user_id
+		WHERE rt.token_hash = $1
+		FOR UPDATE
+	`
+
+	revokeRefreshTokenQuery = `
+		UPDATE refresh_tokens
+		SET revoked_at = $2
+		WHERE id = $1
+		  AND revoked_at IS NULL
+	`
+
 	getCredentialByUserIDQuery = `
 		SELECT user_id, email, username, password_hash, email_verified, status, created_at, updated_at
 		FROM auth_credentials

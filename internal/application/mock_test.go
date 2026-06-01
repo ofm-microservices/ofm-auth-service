@@ -159,6 +159,21 @@ func (mr *MockAuthServiceMockRecorder) SignIn(ctx, identifier, password any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignIn", reflect.TypeOf((*MockAuthService)(nil).SignIn), ctx, identifier, password)
 }
 
+// Refresh mocks base method.
+func (m *MockAuthService) Refresh(ctx context.Context, refreshToken string) (*auth.TokenPair, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Refresh", ctx, refreshToken)
+	ret0, _ := ret[0].(*auth.TokenPair)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Refresh indicates an expected call of Refresh.
+func (mr *MockAuthServiceMockRecorder) Refresh(ctx, refreshToken any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*MockAuthService)(nil).Refresh), ctx, refreshToken)
+}
+
 // VerifyRegistrationEmail mocks base method.
 func (m *MockAuthService) VerifyRegistrationEmail(ctx context.Context, userID, code string) (*auth.RegistrationEmailVerificationResult, error) {
 	m.ctrl.T.Helper()

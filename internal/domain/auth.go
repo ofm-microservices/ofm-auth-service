@@ -73,6 +73,16 @@ type TokenPair struct {
 	ExpiresIn    int64
 }
 
+// RefreshToken identifies the persisted refresh-token record owned by
+// auth-service.
+type RefreshToken struct {
+	ID        string
+	UserID    string
+	TokenHash string
+	ExpiresAt time.Time
+	RevokedAt *time.Time
+}
+
 // CreateRefreshTokenParams contains the data required to persist a refresh
 // token record.
 type CreateRefreshTokenParams struct {
@@ -82,12 +92,23 @@ type CreateRefreshTokenParams struct {
 	ExpiresAt time.Time
 }
 
+// RotateRefreshTokenParams contains the data required to revoke the old
+// refresh token and persist the rotated one atomically.
+type RotateRefreshTokenParams struct {
+	CurrentTokenHash string
+	NewTokenID       string
+	NewTokenHash     string
+	NewExpiresAt     time.Time
+	Now              time.Time
+}
+
 // AuthRepository persists auth-service credentials and verification codes.
 type AuthRepository interface {
 	Create(ctx context.Context, params CreateCredentialParams) (*Credential, error)
 	CreateVerificationCode(ctx context.Context, params CreateVerificationCodeParams) error
 	VerifyRegistrationEmail(ctx context.Context, userID, tokenHash string, now time.Time) (*Credential, error)
 	CreateRefreshToken(ctx context.Context, params CreateRefreshTokenParams) error
+	RotateRefreshToken(ctx context.Context, params RotateRefreshTokenParams) (*Credential, error)
 	GetByUserID(ctx context.Context, userID string) (*Credential, error)
 	GetByIdentifier(ctx context.Context, identifier string) (*Credential, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
