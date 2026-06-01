@@ -62,6 +62,8 @@ const (
 		FOR UPDATE
 	`
 
+	refreshTokenForRevokeQuery = refreshTokenForRotationQuery
+
 	revokeRefreshTokenQuery = `
 		UPDATE refresh_tokens
 		SET revoked_at = $2

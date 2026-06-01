@@ -26,6 +26,8 @@ type AuthService interface {
 	SignIn(ctx context.Context, identifier, password string) (*auth.TokenPair, error)
 	// Refresh rotates a refresh token and returns a new auth token pair.
 	Refresh(ctx context.Context, refreshToken string) (*auth.TokenPair, error)
+	// SignOut revokes the presented refresh token and ends the session.
+	SignOut(ctx context.Context, refreshToken string) error
 	// DeactivateRegistrationAuth marks registration auth data inactive for compensation.
 	DeactivateRegistrationAuth(ctx context.Context, userID string) error
 	// DeleteCredential removes auth data for compensation flows.
