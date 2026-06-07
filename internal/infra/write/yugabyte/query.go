@@ -8,7 +8,7 @@ const (
 	`
 
 	createVerificationCodeQuery = `
-		INSERT INTO email_verification_codes (id, user_id, token_hash, expires_at)
+		INSERT INTO email_verification_codes (email_verification_code_id, user_id, token_hash, expires_at)
 		VALUES ($1, $2, $3, $4)
 	`
 
@@ -38,12 +38,12 @@ const (
 	`
 
 	createRefreshTokenQuery = `
-		INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at)
+		INSERT INTO refresh_tokens (refresh_token_id, user_id, token_hash, expires_at)
 		VALUES ($1, $2, $3, $4)
 	`
 
 	refreshTokenForRotationQuery = `
-		SELECT rt.id,
+		SELECT rt.refresh_token_id,
 		       rt.user_id AS refresh_user_id,
 		       rt.token_hash,
 		       rt.expires_at,
@@ -67,7 +67,7 @@ const (
 	revokeRefreshTokenQuery = `
 		UPDATE refresh_tokens
 		SET revoked_at = $2
-		WHERE id = $1
+		WHERE refresh_token_id = $1
 		  AND revoked_at IS NULL
 	`
 
