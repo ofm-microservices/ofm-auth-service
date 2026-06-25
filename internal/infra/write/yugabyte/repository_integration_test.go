@@ -58,7 +58,7 @@ var _ = Describe("repository integration", func() {
 	var repoAny auth.AuthRepository
 
 	BeforeEach(func() {
-		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE email_verification_codes, refresh_tokens, auth_credentials CASCADE`)
+		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE auth_user_roles, email_verification_codes, refresh_tokens, auth_credentials CASCADE`)
 		Expect(err).NotTo(HaveOccurred())
 
 		var errNew error
@@ -90,6 +90,22 @@ var _ = Describe("repository integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(loaded.UserID).To(Equal(credential.UserID))
 		Expect(loaded.Email).To(Equal("user@example.com"))
+	})
+
+	It("loads assigned roles for a credential", func() {
+		_, err := repoAny.Create(context.Background(), auth.CreateCredentialParams{
+			UserID:       "12121212-1212-1212-1212-121212121212",
+			Email:        "roles@example.com",
+			PasswordHash: "hash",
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = repoSuiteDB.Exec(`INSERT INTO auth_user_roles (user_id, role) VALUES ($1, $2)`, "12121212-1212-1212-1212-121212121212", auth.RoleAdmin)
+		Expect(err).NotTo(HaveOccurred())
+
+		loaded, err := repoAny.GetByUserID(context.Background(), "12121212-1212-1212-1212-121212121212")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(loaded.Roles).To(ContainElement(auth.RoleAdmin))
 	})
 
 	It("reports credential existence by email", func() {

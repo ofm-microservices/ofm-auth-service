@@ -14,6 +14,7 @@ func MapCredentialRowToDomain(row model.CredentialRow) *auth.Credential {
 		PasswordHash:  row.PasswordHash,
 		EmailVerified: row.EmailVerified,
 		Status:        row.Status,
+		Roles:         row.Roles,
 		CreatedAt:     row.CreatedAt,
 		UpdatedAt:     row.UpdatedAt,
 	}

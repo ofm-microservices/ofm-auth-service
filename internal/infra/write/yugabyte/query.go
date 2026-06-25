@@ -97,6 +97,13 @@ const (
 		WHERE user_id = $1
 	`
 
+	listRolesByUserIDQuery = `
+		SELECT role
+		FROM auth_user_roles
+		WHERE user_id = $1
+		ORDER BY role
+	`
+
 	deactivateRegistrationAuthQuery = `
 		UPDATE auth_credentials
 		SET email_verified = FALSE,

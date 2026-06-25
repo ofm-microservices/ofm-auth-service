@@ -174,6 +174,20 @@ func (mr *MockAuthServiceMockRecorder) Refresh(ctx, refreshToken any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*MockAuthService)(nil).Refresh), ctx, refreshToken)
 }
 
+// SignOut mocks base method.
+func (m *MockAuthService) SignOut(ctx context.Context, refreshToken string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SignOut", ctx, refreshToken)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SignOut indicates an expected call of SignOut.
+func (mr *MockAuthServiceMockRecorder) SignOut(ctx, refreshToken any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignOut", reflect.TypeOf((*MockAuthService)(nil).SignOut), ctx, refreshToken)
+}
+
 // VerifyRegistrationEmail mocks base method.
 func (m *MockAuthService) VerifyRegistrationEmail(ctx context.Context, userID, code string) (*auth.RegistrationEmailVerificationResult, error) {
 	m.ctrl.T.Helper()
