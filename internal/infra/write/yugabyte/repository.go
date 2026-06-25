@@ -58,7 +58,23 @@ func (r *repo) Create(ctx context.Context, params domain.CreateCredentialParams)
 		return nil, r.translator.TranslateCreateCredentialError(err)
 	}
 
-	return mapper.MapCredentialRowToDomain(row), nil
+	credential := mapper.MapCredentialRowToDomain(row)
+	return r.attachRoles(ctx, credential)
+}
+
+func (r *repo) ListRolesByUserID(ctx context.Context, userID string) ([]string, error) {
+	started := time.Now()
+	status := "success"
+	defer func() {
+		metrics.Global().ObserveDB("yugabyte", "list_roles_by_user_id", "auth_user_roles", status, time.Since(started))
+	}()
+
+	var roles []string
+	if err := r.db.SelectContext(ctx, &roles, listRolesByUserIDQuery, userID); err != nil {
+		status = "error"
+		return nil, r.translator.TranslateFindCredentialError(err)
+	}
+	return roles, nil
 }
 
 func (r *repo) CreateVerificationCode(ctx context.Context, params domain.CreateVerificationCodeParams) error {
@@ -105,7 +121,8 @@ func (r *repo) VerifyRegistrationEmail(ctx context.Context, userID, tokenHash st
 		return nil, r.translator.TranslateVerifyEmailError(err)
 	}
 
-	return mapper.MapCredentialRowToDomain(row), nil
+	credential := mapper.MapCredentialRowToDomain(row)
+	return r.attachRoles(ctx, credential)
 }
 
 func (r *repo) CreateRefreshToken(ctx context.Context, params domain.CreateRefreshTokenParams) error {
@@ -170,7 +187,7 @@ func (r *repo) RotateRefreshToken(ctx context.Context, params domain.RotateRefre
 	}
 	tx = nil
 
-	return row.Credential, nil
+	return r.attachRoles(ctx, row.Credential)
 }
 
 func (r *repo) RevokeRefreshToken(ctx context.Context, params domain.RevokeRefreshTokenParams) (*domain.Credential, error) {
@@ -208,7 +225,7 @@ func (r *repo) RevokeRefreshToken(ctx context.Context, params domain.RevokeRefre
 	}
 	tx = nil
 
-	return row.Credential, nil
+	return r.attachRoles(ctx, row.Credential)
 }
 
 type refreshTokenMutationRow struct {
@@ -284,7 +301,8 @@ func (r *repo) GetByUserID(ctx context.Context, userID string) (*domain.Credenti
 		return nil, r.translator.TranslateFindCredentialError(err)
 	}
 
-	return mapper.MapCredentialRowToDomain(row), nil
+	credential := mapper.MapCredentialRowToDomain(row)
+	return r.attachRoles(ctx, credential)
 }
 
 func (r *repo) GetByIdentifier(ctx context.Context, identifier string) (*domain.Credential, error) {
@@ -378,4 +396,16 @@ func (r *repo) DeleteByUserID(ctx context.Context, userID string) error {
 	}
 
 	return nil
+}
+
+func (r *repo) attachRoles(ctx context.Context, credential *domain.Credential) (*domain.Credential, error) {
+	if credential == nil {
+		return nil, nil
+	}
+	roles, err := r.ListRolesByUserID(ctx, credential.UserID)
+	if err != nil {
+		return nil, err
+	}
+	credential.Roles = roles
+	return credential, nil
 }

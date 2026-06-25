@@ -375,6 +375,7 @@ func (s *authService) signAccessToken(credential *auth.Credential, now time.Time
 		Subject:   credential.UserID,
 		Email:     credential.Email,
 		Username:  credential.Username,
+		Roles:     credential.Roles,
 		IssuedAt:  now.Unix(),
 		ExpiresAt: now.Add(s.cfg.AccessTokenTTL).Unix(),
 	})

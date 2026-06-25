@@ -6,6 +6,8 @@ import (
 )
 
 const (
+	// RoleAdmin marks a credential that may access admin-only flows.
+	RoleAdmin = "admin"
 	// CredentialStatusPendingRegistration marks auth data created before email
 	// verification finishes.
 	CredentialStatusPendingRegistration = "pending_registration"
@@ -25,6 +27,7 @@ type Credential struct {
 	PasswordHash  string
 	EmailVerified bool
 	Status        string
+	Roles         []string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
@@ -119,6 +122,7 @@ type AuthRepository interface {
 	RevokeRefreshToken(ctx context.Context, params RevokeRefreshTokenParams) (*Credential, error)
 	GetByUserID(ctx context.Context, userID string) (*Credential, error)
 	GetByIdentifier(ctx context.Context, identifier string) (*Credential, error)
+	ListRolesByUserID(ctx context.Context, userID string) ([]string, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
 	DeactivateRegistrationAuth(ctx context.Context, userID string) error
 	DeleteByUserID(ctx context.Context, userID string) error
