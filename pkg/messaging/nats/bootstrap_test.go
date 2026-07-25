@@ -5,7 +5,7 @@ import (
 
 	"auth-service/config"
 
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -14,6 +14,10 @@ var _ = Describe("bootstrap unit cases", func() {
 	It("validates missing logger and wraps connect failures", func() {
 		err := EnsureStream(config.NATSConfig{}, nil)
 		Expect(err).To(MatchError(ErrNilLogger))
+
+		lg, err := logging.New("auth-service", "test", "debug")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(EnsureStream(config.NATSConfig{URL: "nats://127.0.0.1:1"}, lg)).To(HaveOccurred())
 
 		_, err = Connect(config.NATSConfig{URL: "nats://127.0.0.1:1"})
 		Expect(err).To(HaveOccurred())

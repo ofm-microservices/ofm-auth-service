@@ -16,7 +16,7 @@ import (
 	events "auth-service/internal/presentation/event_broker/nats"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/testcontainers/testcontainers-go"
@@ -90,7 +90,7 @@ var _ = Describe("fx providers and invokes", func() {
 			},
 			GRPC: config.GRPCConfig{
 				Host: "127.0.0.1",
-				Port: 19091,
+				Port: 19591,
 			},
 			NATS: config.NATSConfig{
 				URL:                         "nats://127.0.0.1:4222",
@@ -111,6 +111,11 @@ var _ = Describe("fx providers and invokes", func() {
 				SagaQueueSize:               1,
 				SagaAckWait:                 time.Second,
 				SagaMaxDeliver:              1,
+			},
+			JWT: config.JWTConfig{
+				AccessSecret:  "access-secret",
+				RefreshSecret: "refresh-secret",
+				Issuer:        "ofm-auth-service",
 			},
 		}
 
@@ -165,7 +170,7 @@ var _ = Describe("fx providers and invokes", func() {
 	It("constructs the application service", func() {
 		repo := NewMockAuthRepository(ctrl)
 
-		svc, err := ProvideAuthService(repo, logger)
+		svc, err := ProvideAuthService(repo, cfg, logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(svc).NotTo(BeNil())
 	})

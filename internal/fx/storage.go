@@ -4,7 +4,7 @@ import (
 	"auth-service/config"
 	db "auth-service/pkg/storage/yugabyte"
 	"context"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/fx"

@@ -1,28 +1,34 @@
 package service
 
 import (
-	auth "auth-service/internal/domain"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
 	"strings"
 	"time"
 
+	"auth-service/config"
+	auth "auth-service/internal/domain"
 	"github.com/google/uuid"
+	commonjwt "github.com/ofm-microservices/ofm-common/pkg/jwt"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const invalidCreateCredentialCommandMessage = "invalid create auth credential command"
 
 type authService struct {
-	repo AuthRepository
-	log  Logger
+	repo   AuthRepository
+	cfg    config.JWTConfig
+	log    Logger
+	signer commonjwt.Signer
 }
 
 // New constructs the auth application service.
-func New(repo AuthRepository, log Logger) (AuthService, error) {
+func New(repo AuthRepository, cfg config.JWTConfig, log Logger) (AuthService, error) {
 	if repo == nil {
 		return nil, ErrNilAuthRepository
 	}
@@ -30,14 +36,21 @@ func New(repo AuthRepository, log Logger) (AuthService, error) {
 		return nil, ErrNilLogger
 	}
 
+	signer, err := commonjwt.NewSigner(commonjwt.Config{Secret: cfg.AccessSecret})
+	if err != nil {
+		return nil, err
+	}
+
 	return &authService{
-		repo: repo,
-		log:  log.With(logging.String("module", "application")),
+		repo:   repo,
+		cfg:    cfg,
+		log:    log.With(logging.String("module", "application")),
+		signer: signer,
 	}, nil
 }
 
 // CreateCredential validates and persists the auth credential.
-func (s *authService) CreateCredential(ctx context.Context, userID, email, passwordHash string) (*auth.Credential, error) {
+func (s *authService) CreateCredential(ctx context.Context, userID, email, username, passwordHash string) (*auth.Credential, error) {
 	s.log.Info("create auth credential command received",
 		logging.String("user_id", userID),
 		logging.String("email", email),
@@ -51,6 +64,10 @@ func (s *authService) CreateCredential(ctx context.Context, userID, email, passw
 		s.log.Error(invalidCreateCredentialCommandMessage, logging.String("reason", "empty email"))
 		return nil, auth.ErrInvalidEmail
 	}
+	if strings.TrimSpace(username) == "" {
+		s.log.Error(invalidCreateCredentialCommandMessage, logging.String("reason", "empty username"))
+		return nil, auth.ErrInvalidUsername
+	}
 	if strings.TrimSpace(passwordHash) == "" {
 		s.log.Error(invalidCreateCredentialCommandMessage, logging.String("reason", "empty password_hash"))
 		return nil, auth.ErrInvalidPasswordHash
@@ -59,6 +76,7 @@ func (s *authService) CreateCredential(ctx context.Context, userID, email, passw
 	credential, err := s.repo.Create(ctx, auth.CreateCredentialParams{
 		UserID:       userID,
 		Email:        email,
+		Username:     username,
 		PasswordHash: passwordHash,
 	})
 	if err != nil {
@@ -104,10 +122,19 @@ func (s *authService) ExistsByEmail(ctx context.Context, email string) (bool, er
 	return s.repo.ExistsByEmail(ctx, strings.TrimSpace(email))
 }
 
+// GetEmailByUserID returns the stored email for one user.
+func (s *authService) GetEmailByUserID(ctx context.Context, userID string) (string, error) {
+	credential, err := s.repo.GetByUserID(ctx, strings.TrimSpace(userID))
+	if err != nil {
+		return "", err
+	}
+	return credential.Email, nil
+}
+
 // CreatePendingRegistration creates the credential and issues a verification
 // code owned by auth-service.
-func (s *authService) CreatePendingRegistration(ctx context.Context, userID, email, passwordHash string) (*auth.PendingRegistrationResult, error) {
-	credential, err := s.CreateCredential(ctx, userID, email, passwordHash)
+func (s *authService) CreatePendingRegistration(ctx context.Context, userID, email, username, passwordHash string) (*auth.PendingRegistrationResult, error) {
+	credential, err := s.CreateCredential(ctx, userID, email, username, passwordHash)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +146,7 @@ func (s *authService) CreatePendingRegistration(ctx context.Context, userID, ema
 	}
 	expiresAt := time.Now().UTC().Add(10 * time.Minute)
 	if err := s.repo.CreateVerificationCode(ctx, auth.CreateVerificationCodeParams{
-		ID:        uuid.NewString(),
+		ID:        uuid.Must(uuid.NewV7()).String(),
 		UserID:    userID,
 		TokenHash: hashVerificationCode(code),
 		ExpiresAt: expiresAt,
@@ -136,6 +163,187 @@ func (s *authService) CreatePendingRegistration(ctx context.Context, userID, ema
 	}, nil
 }
 
+// VerifyRegistrationEmail verifies the pending email code and marks the auth
+// credential as email-verified.
+func (s *authService) VerifyRegistrationEmail(ctx context.Context, userID, code string) (*auth.RegistrationEmailVerificationResult, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, auth.ErrInvalidUserID
+	}
+	if strings.TrimSpace(code) == "" {
+		return nil, auth.ErrInvalidVerificationCode
+	}
+
+	credential, err := s.repo.VerifyRegistrationEmail(ctx, strings.TrimSpace(userID), hashVerificationCode(strings.TrimSpace(code)), time.Now().UTC())
+	if err != nil {
+		s.log.Error("verify registration email failed", logging.String("user_id", userID), logging.Err(err))
+		return nil, err
+	}
+
+	return &auth.RegistrationEmailVerificationResult{
+		UserID: credential.UserID,
+		Email:  credential.Email,
+		Status: "verified",
+	}, nil
+}
+
+// IssueRegistrationTokens creates an access token and stores a refresh token
+// for an email-verified credential.
+func (s *authService) IssueRegistrationTokens(ctx context.Context, userID string) (*auth.TokenPair, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, auth.ErrInvalidUserID
+	}
+
+	credential, err := s.repo.GetByUserID(ctx, strings.TrimSpace(userID))
+	if err != nil {
+		return nil, err
+	}
+	if !credential.EmailVerified {
+		return nil, auth.ErrEmailNotVerified
+	}
+	if credential.Status != auth.CredentialStatusEmailVerified {
+		return nil, auth.ErrEmailNotVerified
+	}
+
+	now := time.Now().UTC()
+	accessToken, err := s.signAccessToken(credential, now)
+	if err != nil {
+		return nil, err
+	}
+	refreshToken, err := generateRandomToken(s.cfg.RefreshTokenBytes)
+	if err != nil {
+		return nil, auth.ErrFailedToCreateRefreshToken
+	}
+
+	if err := s.repo.CreateRefreshToken(ctx, auth.CreateRefreshTokenParams{
+		ID:        uuid.Must(uuid.NewV7()).String(),
+		UserID:    credential.UserID,
+		TokenHash: hashVerificationCode(refreshToken),
+		ExpiresAt: now.Add(s.cfg.RefreshTokenTTL),
+	}); err != nil {
+		return nil, err
+	}
+
+	return &auth.TokenPair{
+		UserID:       credential.UserID,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(s.cfg.AccessTokenTTL.Seconds()),
+	}, nil
+}
+
+// SignIn validates a stored credential against a username-or-email identifier
+// and returns auth-owned tokens.
+func (s *authService) SignIn(ctx context.Context, identifier, password string) (*auth.TokenPair, error) {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" || strings.TrimSpace(password) == "" {
+		return nil, auth.ErrInvalidCredentials
+	}
+
+	credential, err := s.repo.GetByIdentifier(ctx, identifier)
+	if err != nil {
+		return nil, auth.ErrInvalidCredentials
+	}
+	if !credential.EmailVerified || credential.Status != auth.CredentialStatusEmailVerified {
+		return nil, auth.ErrInvalidCredentials
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(credential.PasswordHash), []byte(password)); err != nil {
+		return nil, auth.ErrInvalidCredentials
+	}
+
+	now := time.Now().UTC()
+	accessToken, err := s.signAccessToken(credential, now)
+	if err != nil {
+		return nil, err
+	}
+	refreshToken, err := generateRandomToken(s.cfg.RefreshTokenBytes)
+	if err != nil {
+		return nil, auth.ErrFailedToCreateRefreshToken
+	}
+
+	if err := s.repo.CreateRefreshToken(ctx, auth.CreateRefreshTokenParams{
+		ID:        uuid.Must(uuid.NewV7()).String(),
+		UserID:    credential.UserID,
+		TokenHash: hashVerificationCode(refreshToken),
+		ExpiresAt: now.Add(s.cfg.RefreshTokenTTL),
+	}); err != nil {
+		return nil, err
+	}
+
+	return &auth.TokenPair{
+		UserID:       credential.UserID,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(s.cfg.AccessTokenTTL.Seconds()),
+	}, nil
+}
+
+// Refresh rotates a refresh token and returns a new token pair for the owning
+// credential.
+func (s *authService) Refresh(ctx context.Context, refreshToken string) (*auth.TokenPair, error) {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return nil, auth.ErrInvalidRefreshToken
+	}
+
+	now := time.Now().UTC()
+	newRefreshToken, err := generateRandomToken(s.cfg.RefreshTokenBytes)
+	if err != nil {
+		return nil, auth.ErrFailedToCreateRefreshToken
+	}
+	credential, err := s.repo.RotateRefreshToken(ctx, auth.RotateRefreshTokenParams{
+		CurrentTokenHash: hashVerificationCode(refreshToken),
+		NewTokenID:       uuid.Must(uuid.NewV7()).String(),
+		NewTokenHash:     hashVerificationCode(newRefreshToken),
+		NewExpiresAt:     now.Add(s.cfg.RefreshTokenTTL),
+		Now:              now,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	accessToken, err := s.signAccessToken(credential, now)
+	if err != nil {
+		return nil, err
+	}
+
+	return &auth.TokenPair{
+		UserID:       credential.UserID,
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(s.cfg.AccessTokenTTL.Seconds()),
+	}, nil
+}
+
+// SignOut revokes a refresh token without issuing replacement credentials.
+func (s *authService) SignOut(ctx context.Context, refreshToken string) error {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return auth.ErrInvalidRefreshToken
+	}
+
+	if _, err := s.repo.RevokeRefreshToken(ctx, auth.RevokeRefreshTokenParams{
+		CurrentTokenHash: hashVerificationCode(refreshToken),
+		Now:              time.Now().UTC(),
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeactivateRegistrationAuth marks auth registration data inactive for
+// compensation.
+func (s *authService) DeactivateRegistrationAuth(ctx context.Context, userID string) error {
+	if strings.TrimSpace(userID) == "" {
+		return auth.ErrInvalidUserID
+	}
+
+	return s.repo.DeactivateRegistrationAuth(ctx, strings.TrimSpace(userID))
+}
+
 func generateVerificationCode() (string, error) {
 	buf := make([]byte, 3)
 	if _, err := rand.Read(buf); err != nil {
@@ -149,4 +357,26 @@ func generateVerificationCode() (string, error) {
 func hashVerificationCode(code string) string {
 	sum := sha256.Sum256([]byte(code))
 	return hex.EncodeToString(sum[:])
+}
+
+func generateRandomToken(bytesLen int) (string, error) {
+	if bytesLen <= 0 {
+		bytesLen = 32
+	}
+	buf := make([]byte, bytesLen)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func (s *authService) signAccessToken(credential *auth.Credential, now time.Time) (string, error) {
+	return s.signer.Sign(commonjwt.Claims{
+		Subject:   credential.UserID,
+		Email:     credential.Email,
+		Username:  credential.Username,
+		Roles:     credential.Roles,
+		IssuedAt:  now.Unix(),
+		ExpiresAt: now.Add(s.cfg.AccessTokenTTL).Unix(),
+	})
 }

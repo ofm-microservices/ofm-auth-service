@@ -4,7 +4,7 @@ import (
 	"auth-service/config"
 	eventbroker "auth-service/internal/presentation/event_broker"
 	"context"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	"time"
 
 	"github.com/nats-io/nats.go"

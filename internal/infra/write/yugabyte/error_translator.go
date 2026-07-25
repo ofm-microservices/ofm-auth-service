@@ -4,7 +4,6 @@ import (
 	auth "auth-service/internal/domain"
 	"database/sql"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/jackc/pgerrcode"
@@ -32,23 +31,23 @@ func (t *PgErrorTranslator) TranslateCreateCredentialError(err error) error {
 		case pgerrcode.UniqueViolation:
 			switch pgErr.ConstraintName {
 			case authCredentialsPrimaryKeyConstraint:
-				return WrapDomainError(auth.ErrAuthCredentialsAlreadyExist, err)
+				return auth.ErrAuthCredentialsAlreadyExist
 			case authCredentialsEmailConstraint:
-				return WrapDomainError(auth.ErrEmailAlreadyTaken, err)
+				return auth.ErrEmailAlreadyTaken
 			default:
 				switch {
 				case strings.Contains(err.Error(), authCredentialsPrimaryKeyConstraint):
-					return WrapDomainError(auth.ErrAuthCredentialsAlreadyExist, err)
+					return auth.ErrAuthCredentialsAlreadyExist
 				case strings.Contains(err.Error(), authCredentialsEmailConstraint):
-					return WrapDomainError(auth.ErrEmailAlreadyTaken, err)
+					return auth.ErrEmailAlreadyTaken
 				}
 			}
 		case pgerrcode.InvalidTextRepresentation:
-			return WrapDomainError(auth.ErrInvalidUserID, err)
+			return auth.ErrInvalidUserID
 		}
 	}
 
-	return WrapCreateCredentialError(err)
+	return auth.ErrFailedToCreateCredential
 }
 
 func (t *PgErrorTranslator) TranslateCreateVerificationCodeError(err error) error {
@@ -56,29 +55,73 @@ func (t *PgErrorTranslator) TranslateCreateVerificationCodeError(err error) erro
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case pgerrcode.InvalidTextRepresentation:
-			return WrapDomainError(auth.ErrInvalidUserID, err)
+			return auth.ErrInvalidUserID
 		case pgerrcode.ForeignKeyViolation:
-			return WrapDomainError(auth.ErrAuthNotFound, err)
+			return auth.ErrAuthNotFound
 		}
 	}
 
-	return WrapCreateVerificationCodeError(err)
+	return auth.ErrFailedToCreateVerificationCode
+}
+
+func (t *PgErrorTranslator) TranslateVerifyEmailError(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return auth.ErrInvalidVerificationCode
+	}
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.InvalidTextRepresentation {
+		return auth.ErrInvalidUserID
+	}
+
+	return auth.ErrFailedToVerifyEmail
+}
+
+func (t *PgErrorTranslator) TranslateCreateRefreshTokenError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case pgerrcode.InvalidTextRepresentation:
+			return auth.ErrInvalidUserID
+		case pgerrcode.ForeignKeyViolation:
+			return auth.ErrAuthNotFound
+		}
+	}
+
+	return auth.ErrFailedToCreateRefreshToken
+}
+
+func (t *PgErrorTranslator) TranslateRotateRefreshTokenError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case pgerrcode.InvalidTextRepresentation:
+			return auth.ErrInvalidRefreshToken
+		case pgerrcode.ForeignKeyViolation:
+			return auth.ErrAuthNotFound
+		}
+	}
+
+	return auth.ErrFailedToRotateRefreshToken
 }
 
 func (t *PgErrorTranslator) TranslateFindCredentialError(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
-		return WrapDomainError(auth.ErrAuthNotFound, err)
+		return auth.ErrAuthNotFound
 	}
 
-	return WrapFindCredentialError(err)
+	return auth.ErrFailedToFindCredential
+}
+
+func (t *PgErrorTranslator) TranslateDeactivateCredentialError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.InvalidTextRepresentation {
+		return auth.ErrInvalidUserID
+	}
+
+	return auth.ErrFailedToDeactivateCredential
 }
 
 func (t *PgErrorTranslator) TranslateDeleteCredentialError(err error) error {
-	return WrapDeleteCredentialError(err)
-}
-
-// WrapDomainError preserves the domain error while attaching the original
-// database cause for logging and debugging.
-func WrapDomainError(domainErr, err error) error {
-	return fmt.Errorf("%w: %v", domainErr, err)
+	return auth.ErrFailedToDeleteCredential
 }

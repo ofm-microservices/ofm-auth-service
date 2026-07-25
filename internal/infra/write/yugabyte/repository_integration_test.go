@@ -22,6 +22,7 @@ import (
 
 func TestYugabyteRepository(t *testing.T) {
 	t.Helper()
+	testcontainers.SkipIfProviderIsNotHealthy(t)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Yugabyte Repository Suite")
 }
@@ -57,7 +58,7 @@ var _ = Describe("repository integration", func() {
 	var repoAny auth.AuthRepository
 
 	BeforeEach(func() {
-		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE email_verification_codes, auth_credentials`)
+		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE auth_user_roles, email_verification_codes, refresh_tokens, auth_credentials CASCADE`)
 		Expect(err).NotTo(HaveOccurred())
 
 		var errNew error
@@ -89,6 +90,22 @@ var _ = Describe("repository integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(loaded.UserID).To(Equal(credential.UserID))
 		Expect(loaded.Email).To(Equal("user@example.com"))
+	})
+
+	It("loads assigned roles for a credential", func() {
+		_, err := repoAny.Create(context.Background(), auth.CreateCredentialParams{
+			UserID:       "12121212-1212-1212-1212-121212121212",
+			Email:        "roles@example.com",
+			PasswordHash: "hash",
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = repoSuiteDB.Exec(`INSERT INTO auth_user_roles (user_id, role) VALUES ($1, $2)`, "12121212-1212-1212-1212-121212121212", auth.RoleAdmin)
+		Expect(err).NotTo(HaveOccurred())
+
+		loaded, err := repoAny.GetByUserID(context.Background(), "12121212-1212-1212-1212-121212121212")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(loaded.Roles).To(ContainElement(auth.RoleAdmin))
 	})
 
 	It("reports credential existence by email", func() {
@@ -261,7 +278,7 @@ $$;
 	dbPort, err := strconv.Atoi(port.Port())
 	Expect(err).NotTo(HaveOccurred())
 
-	return container, config.DBConfig{
+	cfg := config.DBConfig{
 		Host:            host,
 		Port:            dbPort,
 		User:            "admin",
@@ -274,6 +291,21 @@ $$;
 		MigrationsPath:  "file://" + filepath.Join(authServiceRoot(), "migration", "yugabyte"),
 		MigrationsTable: "schema_migrations_auth_service",
 	}
+
+	Eventually(func() error {
+		dbx, openErr := pkgdb.Open(cfg)
+		if openErr != nil {
+			return openErr
+		}
+		defer dbx.Close()
+		if pingErr := dbx.Ping(); pingErr != nil {
+			return pingErr
+		}
+		var one int
+		return dbx.Get(&one, `SELECT 1`)
+	}, 3*time.Minute, 2*time.Second).Should(Succeed())
+
+	return container, cfg
 }
 
 func authServiceRoot() string {

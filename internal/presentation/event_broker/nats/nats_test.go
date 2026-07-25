@@ -11,7 +11,7 @@ import (
 	auth "auth-service/internal/domain"
 	eventbroker "auth-service/internal/presentation/event_broker"
 	"github.com/nats-io/nats.go"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -259,6 +259,7 @@ var _ = Describe("registration saga subscriber", func() {
 			ClientID:     "client-1",
 			UserID:       "user-1",
 			Email:        "user@example.com",
+			Username:     "alex",
 			PasswordHash: "hash",
 		}
 		payload, err := json.Marshal(cmd)
@@ -277,7 +278,7 @@ var _ = Describe("registration saga subscriber", func() {
 		Expect(createHandler).NotTo(BeNil())
 
 		svc.EXPECT().
-			CreatePendingRegistration(gomock.Any(), "user-1", "user@example.com", "hash").
+			CreatePendingRegistration(gomock.Any(), "user-1", "user@example.com", "alex", "hash").
 			Return(&auth.PendingRegistrationResult{
 				UserID:           "user-1",
 				Email:            "user@example.com",
@@ -297,7 +298,7 @@ var _ = Describe("registration saga subscriber", func() {
 		sub := subAny.(*registrationSagaSubscriber)
 		sub.mapr = &fakeMapper{createFailure: []byte(`{"status":"failed"}`)}
 
-		cmd := createAuthCommand{UserID: "user-1", Email: "user@example.com", PasswordHash: "hash"}
+		cmd := createAuthCommand{UserID: "user-1", Email: "user@example.com", Username: "alex", PasswordHash: "hash"}
 		payload, err := json.Marshal(cmd)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -314,7 +315,7 @@ var _ = Describe("registration saga subscriber", func() {
 		Expect(createHandler).NotTo(BeNil())
 
 		svc.EXPECT().
-			CreatePendingRegistration(gomock.Any(), "user-1", "user@example.com", "hash").
+			CreatePendingRegistration(gomock.Any(), "user-1", "user@example.com", "alex", "hash").
 			Return(nil, auth.ErrEmailAlreadyTaken)
 		broker.EXPECT().Publish(gomock.Any(), cfg.SagaCreateAuthResultSubject, []byte(`{"status":"failed"}`)).Return(nil)
 
@@ -581,5 +582,30 @@ var _ = Describe("nats mapper and failure reasons", func() {
 		Expect(resolver.DeleteAuthFailureReason(auth.ErrInvalidUserID)).To(Equal("invalid user_id"))
 		Expect(resolver.DeleteAuthFailureReason(auth.ErrAuthNotFound)).To(Equal("auth credentials not found"))
 		Expect(resolver.DeleteAuthFailureReason(errors.New("boom"))).To(Equal("failed to delete auth credential"))
+	})
+
+	It("covers wrapper helpers and constructor validation branches", func() {
+		cause := errors.New("boom")
+
+		Expect(WrapConnectToNATSError(cause)).To(MatchError(ContainSubstring("connect to nats")))
+		Expect(WrapPublishToNATSError("subject", cause)).To(MatchError(ContainSubstring("publish to nats (subject)")))
+		Expect(WrapSubscribeToNATSError("subject", cause)).To(MatchError(ContainSubstring("subscribe to nats (subject)")))
+		Expect(WrapFlushNATSPublisherError(cause)).To(MatchError(ContainSubstring("flush nats publisher")))
+		Expect(WrapInitJetStreamContextError(cause)).To(MatchError(ContainSubstring("init jetstream context")))
+		Expect(WrapEnsureConsumerError("stream", "durable", cause, cause)).To(MatchError(ContainSubstring(`ensure consumer "durable" in stream "stream"`)))
+		Expect(WrapCreatePullSubscriberError("subject", "durable", cause)).To(MatchError(ContainSubstring("create pull subscriber")))
+		Expect(WrapUnmarshalCreateAuthCommandError(cause)).To(MatchError(ContainSubstring("unmarshal create auth command")))
+		Expect(WrapUnmarshalDeleteAuthCommandError(cause)).To(MatchError(ContainSubstring("unmarshal delete auth command")))
+		Expect(WrapMarshalCreateAuthResultError(cause)).To(MatchError(ContainSubstring("marshal create auth result")))
+		Expect(WrapMarshalDeleteAuthResultError(cause)).To(MatchError(ContainSubstring("marshal delete auth result")))
+		Expect(WrapMarshalMailSendCommandError(cause)).To(MatchError(ContainSubstring("marshal mail send command")))
+
+		Expect(newPullConsumerConfigValidator()).NotTo(BeNil())
+		lg, err := logging.New("auth-service", "test", "debug")
+		Expect(err).NotTo(HaveOccurred())
+
+		brokerAny, err := NewBroker(config.NATSConfig{}, lg)
+		Expect(brokerAny).To(BeNil())
+		Expect(err).To(MatchError(ErrEmptyNATSURL))
 	})
 })

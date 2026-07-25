@@ -14,6 +14,7 @@ func main() {
 	run(
 		appfx.ConfigModule,
 		appfx.LoggerModule,
+		appfx.MetricsModule,
 		appfx.AppModule,
 		appfx.StorageModule,
 		appfx.MessagingModule,

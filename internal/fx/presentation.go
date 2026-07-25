@@ -7,7 +7,7 @@ import (
 	events "auth-service/internal/presentation/event_broker/nats"
 	grpcserver "auth-service/internal/presentation/grpc"
 	"context"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 
 	"go.uber.org/fx"
 )

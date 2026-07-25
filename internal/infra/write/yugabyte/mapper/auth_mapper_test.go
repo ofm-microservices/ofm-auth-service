@@ -24,6 +24,7 @@ var _ = Describe("MapCredentialRowToDomain", func() {
 			Email:         "user@example.com",
 			PasswordHash:  "hash",
 			EmailVerified: true,
+			Roles:         []string{"admin"},
 			CreatedAt:     now,
 			UpdatedAt:     now,
 		})
@@ -33,6 +34,7 @@ var _ = Describe("MapCredentialRowToDomain", func() {
 			Email:         "user@example.com",
 			PasswordHash:  "hash",
 			EmailVerified: true,
+			Roles:         []string{"admin"},
 			CreatedAt:     now,
 			UpdatedAt:     now,
 		}))

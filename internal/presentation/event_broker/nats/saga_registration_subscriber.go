@@ -5,7 +5,7 @@ import (
 	application "auth-service/internal/application"
 	eventbroker "auth-service/internal/presentation/event_broker"
 	"context"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 )
 
 type createAuthResult struct {

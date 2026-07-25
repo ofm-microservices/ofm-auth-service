@@ -2,20 +2,86 @@ package repository
 
 const (
 	createCredentialQuery = `
-		INSERT INTO auth_credentials (user_id, email, password_hash, email_verified)
-		VALUES ($1, $2, $3, FALSE)
-		RETURNING user_id, email, password_hash, email_verified, created_at, updated_at
+		INSERT INTO auth_credentials (user_id, email, username, password_hash, email_verified, status)
+		VALUES ($1, $2, $3, $4, FALSE, 'pending_registration')
+		RETURNING user_id, email, username, password_hash, email_verified, status, created_at, updated_at
 	`
 
 	createVerificationCodeQuery = `
-		INSERT INTO email_verification_codes (id, user_id, token_hash, expires_at)
+		INSERT INTO email_verification_codes (email_verification_code_id, user_id, token_hash, expires_at)
 		VALUES ($1, $2, $3, $4)
 	`
 
+	verifyRegistrationEmailQuery = `
+		WITH code AS (
+			UPDATE email_verification_codes
+			SET used_at = NOW()
+			WHERE user_id = $1
+			  AND token_hash = $2
+			  AND used_at IS NULL
+			  AND expires_at > $3
+			RETURNING user_id
+		)
+		UPDATE auth_credentials
+		SET email_verified = TRUE,
+		    status = 'email_verified'
+		FROM code
+		WHERE auth_credentials.user_id = code.user_id
+		RETURNING auth_credentials.user_id,
+		          auth_credentials.email,
+		          auth_credentials.username,
+		          auth_credentials.password_hash,
+		          auth_credentials.email_verified,
+		          auth_credentials.status,
+		          auth_credentials.created_at,
+		          auth_credentials.updated_at
+	`
+
+	createRefreshTokenQuery = `
+		INSERT INTO refresh_tokens (refresh_token_id, user_id, token_hash, expires_at)
+		VALUES ($1, $2, $3, $4)
+	`
+
+	refreshTokenForRotationQuery = `
+		SELECT rt.refresh_token_id,
+		       rt.user_id AS refresh_user_id,
+		       rt.token_hash,
+		       rt.expires_at,
+		       rt.revoked_at,
+		       ac.user_id AS credential_user_id,
+		       ac.email,
+		       ac.username,
+		       ac.password_hash,
+		       ac.email_verified,
+		       ac.status,
+		       ac.created_at,
+		       ac.updated_at
+		FROM refresh_tokens rt
+		JOIN auth_credentials ac ON ac.user_id = rt.user_id
+		WHERE rt.token_hash = $1
+		FOR UPDATE
+	`
+
+	refreshTokenForRevokeQuery = refreshTokenForRotationQuery
+
+	revokeRefreshTokenQuery = `
+		UPDATE refresh_tokens
+		SET revoked_at = $2
+		WHERE refresh_token_id = $1
+		  AND revoked_at IS NULL
+	`
+
 	getCredentialByUserIDQuery = `
-		SELECT user_id, email, password_hash, email_verified, created_at, updated_at
+		SELECT user_id, email, username, password_hash, email_verified, status, created_at, updated_at
 		FROM auth_credentials
 		WHERE user_id = $1
+	`
+
+	getCredentialByIdentifierQuery = `
+		SELECT user_id, email, username, password_hash, email_verified, status, created_at, updated_at
+		FROM auth_credentials
+		WHERE username = $1 OR email = $1
+		LIMIT 1
 	`
 
 	existsCredentialByEmailQuery = `
@@ -28,6 +94,20 @@ const (
 
 	deleteCredentialByUserIDQuery = `
 		DELETE FROM auth_credentials
+		WHERE user_id = $1
+	`
+
+	listRolesByUserIDQuery = `
+		SELECT role
+		FROM auth_user_roles
+		WHERE user_id = $1
+		ORDER BY role
+	`
+
+	deactivateRegistrationAuthQuery = `
+		UPDATE auth_credentials
+		SET email_verified = FALSE,
+			status = 'registration_failed'
 		WHERE user_id = $1
 	`
 )

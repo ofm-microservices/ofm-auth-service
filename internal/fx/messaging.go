@@ -6,12 +6,13 @@ import (
 	broker "auth-service/internal/presentation/event_broker/nats"
 	natsbootstrap "auth-service/pkg/messaging/nats"
 	"context"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 
 	"go.uber.org/fx"
 )
 
-// MessagingModule wires NATS bootstrap and broker runtime into auth-service.
+// MessagingModule wires JetStream bootstrap and the NATS broker runtime into
+// auth-service.
 var MessagingModule = fx.Options(
 	fx.Invoke(InvokeEnsureStream),
 	fx.Provide(ProvideEventBroker),
