@@ -58,7 +58,7 @@ var _ = Describe("repository integration", func() {
 	var repoAny auth.AuthRepository
 
 	BeforeEach(func() {
-		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE auth_user_roles, email_verification_codes, refresh_tokens, auth_credentials CASCADE`)
+		_, err := repoSuiteDB.Exec(`TRUNCATE TABLE outbox_events, auth_user_roles, email_verification_codes, refresh_tokens, auth_credentials CASCADE`)
 		Expect(err).NotTo(HaveOccurred())
 
 		var errNew error
@@ -90,6 +90,20 @@ var _ = Describe("repository integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(loaded.UserID).To(Equal(credential.UserID))
 		Expect(loaded.Email).To(Equal("user@example.com"))
+	})
+
+	It("captures insert update and delete in the same database write path", func() {
+		userID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+		_, err := repoSuiteDB.Exec(`INSERT INTO auth_credentials (user_id, email, username, password_hash, email_verified, status) VALUES ($1, $2, $3, $4, FALSE, 'active')`, userID, "outbox@example.com", "outbox-user", "hash")
+		Expect(err).NotTo(HaveOccurred())
+		_, err = repoSuiteDB.Exec(`UPDATE auth_credentials SET status = 'disabled' WHERE user_id = $1`, userID)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = repoSuiteDB.Exec(`DELETE FROM auth_credentials WHERE user_id = $1`, userID)
+		Expect(err).NotTo(HaveOccurred())
+
+		var operations []string
+		Expect(repoSuiteDB.Select(&operations, `SELECT operation FROM outbox_events WHERE aggregate_id = $1 ORDER BY occurred_at, created_at`, userID)).To(Succeed())
+		Expect(operations).To(Equal([]string{"created", "updated", "deactivated"}))
 	})
 
 	It("loads assigned roles for a credential", func() {

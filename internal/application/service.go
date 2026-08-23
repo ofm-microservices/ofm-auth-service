@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -345,6 +346,14 @@ func (s *authService) DeactivateRegistrationAuth(ctx context.Context, userID str
 }
 
 func generateVerificationCode() (string, error) {
+	// Local experiments need a deterministic code because there is no human
+	// mailbox in the k6 environment. Production keeps the cryptographically
+	// random code path unless APP_ENV=local and the explicit test setting exists.
+	if os.Getenv("APP_ENV") == "local" {
+		if code := strings.TrimSpace(os.Getenv("AUTH_FIXED_VERIFICATION_CODE")); len(code) == 6 {
+			return code, nil
+		}
+	}
 	buf := make([]byte, 3)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err

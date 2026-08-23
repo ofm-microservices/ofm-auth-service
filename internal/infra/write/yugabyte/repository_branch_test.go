@@ -32,6 +32,8 @@ func TestRepositoryBranches(t *testing.T) {
 						columns: []string{"user_id", "email", "username", "password_hash", "email_verified", "status", "created_at", "updated_at"},
 						values:  []driver.Value{"user-1", "user@example.com", "tester", "hash", true, "email_verified", time.Now(), time.Now()},
 					}
+				case strings.Contains(query, "FROM auth_user_roles"):
+					return fakeRowResult{columns: []string{"role"}, values: nil}
 				default:
 					return fakeRowResult{err: sql.ErrNoRows}
 				}
@@ -67,6 +69,8 @@ func TestRepositoryBranches(t *testing.T) {
 						columns: []string{"user_id", "email", "username", "password_hash", "email_verified", "status", "created_at", "updated_at"},
 						values:  []driver.Value{"user-2", "user2@example.com", "tester", "hash", true, "email_verified", time.Now(), time.Now()},
 					}
+				case strings.Contains(query, "FROM auth_user_roles"):
+					return fakeRowResult{columns: []string{"role"}, values: nil}
 				case strings.Contains(query, "SELECT EXISTS"):
 					return fakeRowResult{columns: []string{"exists"}, values: []driver.Value{true}}
 				default:
@@ -272,6 +276,9 @@ type fakeRows struct {
 func (r *fakeRows) Columns() []string { return r.columns }
 func (r *fakeRows) Close() error      { return nil }
 func (r *fakeRows) Next(dest []driver.Value) error {
+	if r.values == nil {
+		return io.EOF
+	}
 	if r.served {
 		return io.EOF
 	}

@@ -4,7 +4,7 @@ import (
 	"auth-service/config"
 	app "auth-service/internal/application"
 	eventbroker "auth-service/internal/presentation/event_broker"
-	events "auth-service/internal/presentation/event_broker/nats"
+	events "auth-service/internal/presentation/event_broker/kafka"
 	grpcserver "auth-service/internal/presentation/grpc"
 	"context"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
@@ -16,7 +16,6 @@ import (
 // the FX lifecycle.
 var PresentationModule = fx.Options(
 	fx.Provide(
-		events.NewDomainFailureReasonResolver,
 		ProvideRegistrationSagaSubscriber,
 		ProvideGRPCServer,
 	),
@@ -26,16 +25,15 @@ var PresentationModule = fx.Options(
 	),
 )
 
-// ProvideRegistrationSagaSubscriber constructs the NATS subscriber that
+// ProvideRegistrationSagaSubscriber constructs the Kafka subscriber that
 // consumes registration-saga commands.
 func ProvideRegistrationSagaSubscriber(
 	broker eventbroker.EventBroker,
 	service app.AuthService,
 	cfg *config.Config,
-	resolver events.FailureReasonResolver,
 	lg logging.Logger,
 ) (events.RegistrationSagaSubscriber, error) {
-	return events.NewRegistrationSagaSubscriber(broker, service, cfg.NATS, resolver, lg)
+	return events.NewRegistrationSagaSubscriber(broker, service, cfg.Kafka, lg)
 }
 
 // ProvideGRPCServer constructs the gRPC query server exposed by auth-service.
@@ -62,12 +60,11 @@ func InvokeSubscribeRegistrationSaga(
 			runCtx, runCancel := context.WithCancel(context.Background())
 			cancel = runCancel
 
-			if err := subscriber.Subscribe(runCtx); err != nil {
-				lg.Error("subscribe to registration saga commands failed", logging.Err(err))
-				cancel()
-				return err
-			}
-
+			go func() {
+				if err := subscriber.Subscribe(runCtx); err != nil && runCtx.Err() == nil {
+					lg.Error("subscribe to registration saga commands failed", logging.Err(err))
+				}
+			}()
 			lg.Info("auth-service initialized", logging.String("env", cfg.App.Env))
 			return nil
 		},

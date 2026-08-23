@@ -13,7 +13,6 @@ import (
 
 	"auth-service/config"
 	repository "auth-service/internal/infra/write/yugabyte"
-	events "auth-service/internal/presentation/event_broker/nats"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
@@ -112,6 +111,7 @@ var _ = Describe("fx providers and invokes", func() {
 				SagaAckWait:                 time.Second,
 				SagaMaxDeliver:              1,
 			},
+			Kafka: config.KafkaConfig{Brokers: []string{"127.0.0.1:9092"}, GroupID: "auth-test"},
 			JWT: config.JWTConfig{
 				AccessSecret:  "access-secret",
 				RefreshSecret: "refresh-secret",
@@ -185,7 +185,7 @@ var _ = Describe("fx providers and invokes", func() {
 		broker := NewMockEventBroker(ctrl)
 		svc := NewMockAuthService(ctrl)
 
-		subscriber, err := ProvideRegistrationSagaSubscriber(broker, svc, cfg, events.NewDomainFailureReasonResolver(), logger)
+		subscriber, err := ProvideRegistrationSagaSubscriber(broker, svc, cfg, logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(subscriber).NotTo(BeNil())
 
@@ -201,7 +201,7 @@ var _ = Describe("fx providers and invokes", func() {
 
 		Expect(lc.Start(context.Background())).To(Succeed())
 		Expect(lc.Stop(context.Background())).To(Succeed())
-		Expect(subscriber.calls).To(Equal(1))
+		Eventually(func() int { return subscriber.calls }).Should(Equal(1))
 	})
 
 	It("propagates subscriber startup failures", func() {
@@ -209,8 +209,8 @@ var _ = Describe("fx providers and invokes", func() {
 
 		InvokeSubscribeRegistrationSaga(lc, subscriber, cfg, logger)
 
-		Expect(lc.Start(context.Background())).To(MatchError("boom"))
-		Expect(subscriber.calls).To(Equal(1))
+		Expect(lc.Start(context.Background())).To(Succeed())
+		Eventually(func() int { return subscriber.calls }).Should(Equal(1))
 	})
 
 	It("registers grpc lifecycle hooks and stops the server", func() {
@@ -238,9 +238,7 @@ var _ = Describe("fx providers and invokes", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("ensures streams and opens an event broker against real nats", func() {
-		cfg.NATS = fxNATSCfg
-
+	It("opens a Kafka event broker without service-specific stream bootstrap", func() {
 		Expect(InvokeEnsureStream(cfg, logger)).To(Succeed())
 
 		eventBroker, err := ProvideEventBroker(lc, cfg, logger)
@@ -249,12 +247,10 @@ var _ = Describe("fx providers and invokes", func() {
 		Expect(lc.Stop(context.Background())).To(Succeed())
 	})
 
-	It("returns messaging errors for unreachable nats", func() {
-		cfg.NATS.URL = "nats://127.0.0.1:1"
-
-		Expect(InvokeEnsureStream(cfg, logger)).To(HaveOccurred())
-
-		eventBroker, err := ProvideEventBroker(lc, cfg, logger)
+	It("rejects an empty Kafka broker configuration", func() {
+		badCfg := *cfg
+		badCfg.Kafka.Brokers = nil
+		eventBroker, err := ProvideEventBroker(lc, &badCfg, logger)
 		Expect(eventBroker).To(BeNil())
 		Expect(err).To(HaveOccurred())
 	})
