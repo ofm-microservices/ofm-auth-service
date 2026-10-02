@@ -10,6 +10,7 @@ import (
 	"net"
 
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	transportgrpc "github.com/ofm-microservices/ofm-common/pkg/observability/grpc"
 	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
 	authv1 "github.com/ofm-microservices/ofm-common/proto/auth/v1"
 	"google.golang.org/grpc"
@@ -36,7 +37,7 @@ func NewServer(svc app.AuthService, cfg config.GRPCConfig, log logging.Logger) (
 		return nil, ErrNilLogger
 	}
 
-	grpcSrv := grpc.NewServer(grpc.UnaryInterceptor(metrics.UnaryServerInterceptor()))
+	grpcSrv := grpc.NewServer(grpc.ChainUnaryInterceptor(metrics.UnaryServerInterceptor(), transportgrpc.UnaryServerInterceptor(log)))
 	s := &server{
 		svc: svc,
 		cfg: cfg,
