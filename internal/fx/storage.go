@@ -2,7 +2,7 @@ package appfx
 
 import (
 	"auth-service/config"
-	db "auth-service/pkg/storage/yugabyte"
+	db "auth-service/pkg/storage/postgres"
 	"context"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
 
@@ -13,7 +13,7 @@ import (
 // StorageModule wires the write-model database and migrations into auth-service.
 var StorageModule = fx.Options(
 	fx.Invoke(InvokeRunMigrations),
-	fx.Provide(ProvideYugaByteDB),
+	fx.Provide(ProvidePostgresDB),
 )
 
 // InvokeRunMigrations applies auth-service write-model migrations.
@@ -26,8 +26,8 @@ func InvokeRunMigrations(cfg *config.Config, lg logging.Logger) error {
 	return nil
 }
 
-// ProvideYugaByteDB opens the YugabyteDB connection owned by auth-service.
-func ProvideYugaByteDB(lc fx.Lifecycle, cfg *config.Config, lg logging.Logger) (*sqlx.DB, error) {
+// ProvidePostgresDB opens the PostgreSQL connection owned by auth-service.
+func ProvidePostgresDB(lc fx.Lifecycle, cfg *config.Config, lg logging.Logger) (*sqlx.DB, error) {
 	dbx, err := db.Open(cfg.DB)
 	if err != nil {
 		lg.Error("open database failed", logging.Err(err))

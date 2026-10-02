@@ -2,8 +2,8 @@ package repository
 
 import (
 	domain "auth-service/internal/domain"
-	"auth-service/internal/infra/write/yugabyte/mapper"
-	"auth-service/internal/infra/write/yugabyte/model"
+	"auth-service/internal/infra/write/postgres/mapper"
+	"auth-service/internal/infra/write/postgres/model"
 	"context"
 	"database/sql"
 	"time"
@@ -17,10 +17,10 @@ type repo struct {
 	translator DBErrorTranslator
 }
 
-// New constructs the Yugabyte-backed auth repository.
+// New constructs the PostgreSQL-backed auth repository.
 func New(db *sqlx.DB, translator DBErrorTranslator) (domain.AuthRepository, error) {
 	if db == nil {
-		return nil, ErrNilYugaByteDB
+		return nil, ErrNilPostgresDB
 	}
 	if translator == nil {
 		return nil, ErrNilDBErrorTranslator
@@ -33,7 +33,7 @@ func (r *repo) Create(ctx context.Context, params domain.CreateCredentialParams)
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "create", "auth_credentials", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "create", "auth_credentials", status, time.Since(started))
 	}()
 
 	var row model.CredentialRow
@@ -66,7 +66,7 @@ func (r *repo) ListRolesByUserID(ctx context.Context, userID string) ([]string, 
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "list_roles_by_user_id", "auth_user_roles", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "list_roles_by_user_id", "auth_user_roles", status, time.Since(started))
 	}()
 
 	var roles []string
@@ -81,7 +81,7 @@ func (r *repo) CreateVerificationCode(ctx context.Context, params domain.CreateV
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "create", "email_verification_codes", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "create", "email_verification_codes", status, time.Since(started))
 	}()
 
 	if _, err := r.db.ExecContext(
@@ -103,7 +103,7 @@ func (r *repo) VerifyRegistrationEmail(ctx context.Context, userID, tokenHash st
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "verify_registration_email", "auth_credentials", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "verify_registration_email", "auth_credentials", status, time.Since(started))
 	}()
 
 	var row model.CredentialRow
@@ -129,7 +129,7 @@ func (r *repo) CreateRefreshToken(ctx context.Context, params domain.CreateRefre
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "create", "refresh_tokens", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "create", "refresh_tokens", status, time.Since(started))
 	}()
 
 	if _, err := r.db.ExecContext(
@@ -151,7 +151,7 @@ func (r *repo) RotateRefreshToken(ctx context.Context, params domain.RotateRefre
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "rotate", "refresh_tokens", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "rotate", "refresh_tokens", status, time.Since(started))
 	}()
 
 	tx, err := r.db.BeginTxx(ctx, nil)
@@ -194,7 +194,7 @@ func (r *repo) RevokeRefreshToken(ctx context.Context, params domain.RevokeRefre
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "revoke", "refresh_tokens", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "revoke", "refresh_tokens", status, time.Since(started))
 	}()
 
 	tx, err := r.db.BeginTxx(ctx, nil)
@@ -283,7 +283,7 @@ func (r *repo) GetByUserID(ctx context.Context, userID string) (*domain.Credenti
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "get_by_user_id", "auth_credentials", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "get_by_user_id", "auth_credentials", status, time.Since(started))
 	}()
 
 	var row model.CredentialRow
@@ -309,7 +309,7 @@ func (r *repo) GetByIdentifier(ctx context.Context, identifier string) (*domain.
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "get_by_identifier", "auth_credentials", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "get_by_identifier", "auth_credentials", status, time.Since(started))
 	}()
 
 	var row model.CredentialRow
@@ -334,7 +334,7 @@ func (r *repo) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "exists_by_email", "auth_credentials", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "exists_by_email", "auth_credentials", status, time.Since(started))
 	}()
 
 	var exists bool
@@ -350,7 +350,7 @@ func (r *repo) DeactivateRegistrationAuth(ctx context.Context, userID string) er
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "deactivate_registration_auth", "auth_credentials", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "deactivate_registration_auth", "auth_credentials", status, time.Since(started))
 	}()
 
 	result, err := r.db.ExecContext(ctx, deactivateRegistrationAuthQuery, userID)
@@ -376,7 +376,7 @@ func (r *repo) DeleteByUserID(ctx context.Context, userID string) error {
 	started := time.Now()
 	status := "success"
 	defer func() {
-		metrics.Global().ObserveDB("yugabyte", "delete_by_user_id", "auth_credentials", status, time.Since(started))
+		metrics.Global().ObserveDB("postgres", "delete_by_user_id", "auth_credentials", status, time.Since(started))
 	}()
 
 	result, err := r.db.ExecContext(ctx, deleteCredentialByUserIDQuery, userID)

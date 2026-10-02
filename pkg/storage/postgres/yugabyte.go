@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-// Open creates the auth-service YugabyteDB connection pool.
+// Open creates the auth-service PostgreSQL connection pool.
 func Open(cfg config.DBConfig) (*sqlx.DB, error) {
 	dsn := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s",

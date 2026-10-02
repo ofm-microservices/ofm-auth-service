@@ -2,10 +2,10 @@ package mapper
 
 import (
 	auth "auth-service/internal/domain"
-	"auth-service/internal/infra/write/yugabyte/model"
+	"auth-service/internal/infra/write/postgres/model"
 )
 
-// MapCredentialRowToDomain maps the Yugabyte row to the auth domain entity.
+// MapCredentialRowToDomain maps the PostgreSQL row to the auth domain entity.
 func MapCredentialRowToDomain(row model.CredentialRow) *auth.Credential {
 	return &auth.Credential{
 		UserID:        row.UserID,

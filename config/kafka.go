@@ -10,4 +10,7 @@ type KafkaConfig struct {
 	DeleteResultTopic string   `env:"KAFKA_AUTH_DELETE_RESULT_TOPIC" envDefault:"saga.auth.delete.result"`
 	MailTopic         string   `env:"KAFKA_AUTH_MAIL_TOPIC" envDefault:"mail.send"`
 	DeadLetterTopic   string   `env:"KAFKA_AUTH_DLQ_TOPIC" envDefault:"auth-service.dead-letter"`
+	RecoveryTopic     string   `env:"KAFKA_AUTH_RECOVERY_TOPIC" envDefault:"migration.recovery.commands.auth"`
+	RecoveryGroup     string   `env:"KAFKA_AUTH_RECOVERY_GROUP" envDefault:"auth-service-recovery"`
+	RecoveryCompleted string   `env:"KAFKA_AUTH_RECOVERY_COMPLETED_TOPIC" envDefault:"migration.recovery.completed"`
 }

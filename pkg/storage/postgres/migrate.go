@@ -9,14 +9,14 @@ import (
 	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/yugabytedb"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
-// RunMigrations applies the auth-service Yugabyte schema migrations.
+// RunMigrations applies the auth-service PostgreSQL schema migrations.
 func RunMigrations(cfg config.DBConfig) error {
 	dsn := fmt.Sprintf(
-		"yugabytedb://%s:%s@%s:%d/%s?sslmode=%s&x-migrations-table=%s",
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s&x-migrations-table=%s",
 		url.QueryEscape(cfg.User),
 		url.QueryEscape(cfg.Password),
 		cfg.Host,
