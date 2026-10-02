@@ -43,15 +43,15 @@ LOG_LEVEL=info
 
 DB_HOST=127.0.0.1
 DB_PORT=5434
-DB_USER=yugabyte
-DB_PASSWORD=yugabyte
+DB_USER=postgres
+DB_PASSWORD=postgres
 DB_NAME=auth_service
 DB_SSLMODE=disable
 DB_MAX_OPEN_CONNS=20
 DB_MAX_IDLE_CONNS=10
 DB_CONN_MAX_LIFETIME=5m
 
-MIGRATIONS_PATH=file://migration/yugabyte
+MIGRATIONS_PATH=file://migration/postgres
 MIGRATIONS_TABLE=schema_migrations_auth_service
 
 NATS_URL=nats://127.0.0.1:4222
@@ -91,7 +91,7 @@ NATS_SAGA_ADAPTIVE_HIGH_MAX_WAIT=2ms
 Core runtime:
 
 - Go
-- YugabyteDB/Postgres wire protocol for write-model persistence
+- PostgreSQL/Postgres wire protocol for write-model persistence
 - NATS JetStream for saga command and result transport
 - Uber Fx for wiring
 - Zap for structured logging
@@ -112,9 +112,9 @@ Main libraries from `go.mod`:
 - `internal/domain` defines auth entities and business errors
 - `internal/application` owns credential creation and verification code
   generation
-- `internal/infra/write/yugabyte` owns storage models and queries
+- `internal/infra/write/postgres` owns storage models and queries
 - `internal/presentation/event_broker/nats` owns saga command subscribers
-- `migration/yugabyte` contains schema migrations
+- `migration/postgres` contains schema migrations
 
 This service should remain the owner of verification-code semantics. The
 registration saga can orchestrate the flow, but it should not become the source

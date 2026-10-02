@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-// CredentialRow is the Yugabyte persistence model for auth credentials.
+// CredentialRow is the PostgreSQL persistence model for auth credentials.
 type CredentialRow struct {
 	UserID        string    `db:"user_id"`
 	Email         string    `db:"email"`

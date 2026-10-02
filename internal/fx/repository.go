@@ -2,7 +2,7 @@ package appfx
 
 import (
 	auth "auth-service/internal/domain"
-	writerepo "auth-service/internal/infra/write/yugabyte"
+	writerepo "auth-service/internal/infra/write/postgres"
 
 	"github.com/jmoiron/sqlx"
 	"go.uber.org/fx"
@@ -16,7 +16,7 @@ var RepoModule = fx.Options(
 	),
 )
 
-// ProvideWriteRepo constructs the Yugabyte-backed auth repository.
+// ProvideWriteRepo constructs the PostgreSQL-backed auth repository.
 func ProvideWriteRepo(dbx *sqlx.DB, translator writerepo.DBErrorTranslator) (auth.AuthRepository, error) {
 	return writerepo.New(dbx, translator)
 }

@@ -5,6 +5,7 @@ import "time"
 // PullConsumerConfig defines the runtime behavior of one pull-consumer worker
 // group.
 type PullConsumerConfig struct {
+	GroupID    string
 	Stream     string
 	Subject    string
 	Durable    string

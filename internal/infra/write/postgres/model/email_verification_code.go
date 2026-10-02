@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-// VerificationCodeRow is the Yugabyte persistence model for email verification
+// VerificationCodeRow is the PostgreSQL persistence model for email verification
 // codes.
 type VerificationCodeRow struct {
 	EmailVerificationCodeID string    `db:"email_verification_code_id"`

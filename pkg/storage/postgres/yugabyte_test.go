@@ -20,10 +20,10 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func TestYugabyteStorage(t *testing.T) {
+func TestPostgreSQLStorage(t *testing.T) {
 	t.Helper()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Yugabyte Storage Suite")
+	RunSpecs(t, "PostgreSQL Storage Suite")
 }
 
 var (
@@ -35,7 +35,7 @@ var _ = BeforeSuite(func() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	storageSuiteContainer, storageSuiteCfg = startStorageYugabyteContainer(ctx)
+	storageSuiteContainer, storageSuiteCfg = startStoragePostgreSQLContainer(ctx)
 })
 
 var _ = AfterSuite(func() {
@@ -45,7 +45,7 @@ var _ = AfterSuite(func() {
 })
 
 var _ = Describe("Open", func() {
-	It("opens a real Yugabyte connection", func() {
+	It("opens a real PostgreSQL connection", func() {
 		dbx, err := Open(storageSuiteCfg)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(dbx.Ping()).To(Succeed())
@@ -70,7 +70,7 @@ var _ = Describe("Open", func() {
 var _ = Describe("RunMigrations", func() {
 	It("applies migrations and tolerates no-change reruns", func() {
 		cfg := storageSuiteCfg
-		cfg.MigrationsPath = "file://" + filepath.Join(authServiceRoot(), "migration", "yugabyte")
+		cfg.MigrationsPath = "file://" + filepath.Join(authServiceRoot(), "migration", "postgres")
 
 		Expect(RunMigrations(cfg)).To(Succeed())
 		Expect(RunMigrations(cfg)).To(Succeed())
@@ -121,7 +121,7 @@ var _ = Describe("RunMigrations", func() {
 		})
 
 		cfg := storageSuiteCfg
-		cfg.MigrationsPath = "file://migration/yugabyte"
+		cfg.MigrationsPath = "file://migration/postgres"
 		cfg.MigrationsTable = "schema_migrations_auth_service_relative"
 
 		Expect(RunMigrations(cfg)).To(Succeed())
@@ -140,12 +140,12 @@ var _ = Describe("error wrappers", func() {
 	})
 })
 
-func startStorageYugabyteContainer(ctx context.Context) (testcontainers.Container, config.DBConfig) {
+func startStoragePostgreSQLContainer(ctx context.Context) (testcontainers.Container, config.DBConfig) {
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "yugabytedb/yugabyte:2025.2.2.2-b11",
+			Image:        "postgres:16",
 			ExposedPorts: []string{"5433/tcp"},
-			Cmd:          []string{"bin/yugabyted", "start", "--daemon=false"},
+			Cmd:          []string{"bin/postgresd", "start", "--daemon=false"},
 			WaitingFor:   wait.ForListeningPort("5433/tcp").WithStartupTimeout(3 * time.Minute),
 		},
 		Started: true,
@@ -157,7 +157,7 @@ func startStorageYugabyteContainer(ctx context.Context) (testcontainers.Containe
 	port, err := container.MappedPort(ctx, "5433/tcp")
 	Expect(err).NotTo(HaveOccurred())
 
-	adminDSN := fmt.Sprintf("postgres://yugabyte@%s:%s/yugabyte?sslmode=disable", host, port.Port())
+	adminDSN := fmt.Sprintf("postgres://postgres@%s:%s/postgres?sslmode=disable", host, port.Port())
 	var adminDB *sqlx.DB
 	Eventually(func() error {
 		dbx, openErr := sqlx.Connect("pgx", adminDSN)
@@ -210,7 +210,7 @@ $$;
 		MaxOpenConns:    10,
 		MaxIdleConns:    5,
 		ConnMaxLifetime: time.Minute,
-		MigrationsPath:  "file://" + filepath.Join(authServiceRoot(), "migration", "yugabyte"),
+		MigrationsPath:  "file://" + filepath.Join(authServiceRoot(), "migration", "postgres"),
 		MigrationsTable: "schema_migrations_auth_service",
 	}
 }
