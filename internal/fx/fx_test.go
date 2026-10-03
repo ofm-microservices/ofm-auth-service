@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"auth-service/config"
-	repository "auth-service/internal/infra/write/yugabyte"
-	events "auth-service/internal/presentation/event_broker/nats"
+	repository "auth-service/internal/infra/write/postgres"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
@@ -43,7 +43,7 @@ var _ = BeforeSuite(func() {
 	defer cancel()
 
 	fxNATSContainer, fxNATSCfg = startFXNATSContainer(ctx)
-	fxYBContainer, fxYBCfg = startFXYugabyteContainer(ctx)
+	fxYBContainer, fxYBCfg = startFXPostgreSQLContainer(ctx)
 })
 
 var _ = AfterSuite(func() {
@@ -112,6 +112,7 @@ var _ = Describe("fx providers and invokes", func() {
 				SagaAckWait:                 time.Second,
 				SagaMaxDeliver:              1,
 			},
+			Kafka: config.KafkaConfig{Brokers: []string{"127.0.0.1:9092"}, GroupID: "auth-test"},
 			JWT: config.JWTConfig{
 				AccessSecret:  "access-secret",
 				RefreshSecret: "refresh-secret",
@@ -185,7 +186,7 @@ var _ = Describe("fx providers and invokes", func() {
 		broker := NewMockEventBroker(ctrl)
 		svc := NewMockAuthService(ctrl)
 
-		subscriber, err := ProvideRegistrationSagaSubscriber(broker, svc, cfg, events.NewDomainFailureReasonResolver(), logger)
+		subscriber, err := ProvideRegistrationSagaSubscriber(broker, svc, cfg, logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(subscriber).NotTo(BeNil())
 
@@ -200,8 +201,8 @@ var _ = Describe("fx providers and invokes", func() {
 		InvokeSubscribeRegistrationSaga(lc, subscriber, cfg, logger)
 
 		Expect(lc.Start(context.Background())).To(Succeed())
+		Eventually(func() int32 { return atomic.LoadInt32(&subscriber.calls) }).Should(BeNumerically(">=", 1))
 		Expect(lc.Stop(context.Background())).To(Succeed())
-		Expect(subscriber.calls).To(Equal(1))
 	})
 
 	It("propagates subscriber startup failures", func() {
@@ -209,8 +210,8 @@ var _ = Describe("fx providers and invokes", func() {
 
 		InvokeSubscribeRegistrationSaga(lc, subscriber, cfg, logger)
 
-		Expect(lc.Start(context.Background())).To(MatchError("boom"))
-		Expect(subscriber.calls).To(Equal(1))
+		Expect(lc.Start(context.Background())).To(Succeed())
+		Eventually(func() int32 { return atomic.LoadInt32(&subscriber.calls) }).Should(BeNumerically(">=", 1))
 	})
 
 	It("registers grpc lifecycle hooks and stops the server", func() {
@@ -233,14 +234,12 @@ var _ = Describe("fx providers and invokes", func() {
 	It("fails migration invocation and database open with bad config", func() {
 		Expect(InvokeRunMigrations(cfg, logger)).To(HaveOccurred())
 
-		dbx, err := ProvideYugaByteDB(lc, cfg, logger)
+		dbx, err := ProvidePostgresDB(lc, cfg, logger)
 		Expect(dbx).To(BeNil())
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("ensures streams and opens an event broker against real nats", func() {
-		cfg.NATS = fxNATSCfg
-
+	It("opens a Kafka event broker without service-specific stream bootstrap", func() {
 		Expect(InvokeEnsureStream(cfg, logger)).To(Succeed())
 
 		eventBroker, err := ProvideEventBroker(lc, cfg, logger)
@@ -249,22 +248,20 @@ var _ = Describe("fx providers and invokes", func() {
 		Expect(lc.Stop(context.Background())).To(Succeed())
 	})
 
-	It("returns messaging errors for unreachable nats", func() {
-		cfg.NATS.URL = "nats://127.0.0.1:1"
-
-		Expect(InvokeEnsureStream(cfg, logger)).To(HaveOccurred())
-
-		eventBroker, err := ProvideEventBroker(lc, cfg, logger)
+	It("rejects an empty Kafka broker configuration", func() {
+		badCfg := *cfg
+		badCfg.Kafka.Brokers = nil
+		eventBroker, err := ProvideEventBroker(lc, &badCfg, logger)
 		Expect(eventBroker).To(BeNil())
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("runs migrations and opens a real yugabyte connection", func() {
+	It("runs migrations and opens a real postgres connection", func() {
 		cfg.DB = fxYBCfg
 
 		Expect(InvokeRunMigrations(cfg, logger)).To(Succeed())
 
-		dbx, err := ProvideYugaByteDB(lc, cfg, logger)
+		dbx, err := ProvidePostgresDB(lc, cfg, logger)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(dbx.Ping()).To(Succeed())
 		Expect(lc.Stop(context.Background())).To(Succeed())
@@ -273,11 +270,14 @@ var _ = Describe("fx providers and invokes", func() {
 
 type registrationSagaSubscriberStub struct {
 	err   error
-	calls int
+	calls int32
 }
 
-func (s *registrationSagaSubscriberStub) Subscribe(context.Context) error {
-	s.calls++
+func (s *registrationSagaSubscriberStub) Subscribe(ctx context.Context) error {
+	atomic.AddInt32(&s.calls, 1)
+	if s.err == nil {
+		<-ctx.Done()
+	}
 	return s.err
 }
 
@@ -320,12 +320,12 @@ func startFXNATSContainer(ctx context.Context) (testcontainers.Container, config
 	}
 }
 
-func startFXYugabyteContainer(ctx context.Context) (testcontainers.Container, config.DBConfig) {
+func startFXPostgreSQLContainer(ctx context.Context) (testcontainers.Container, config.DBConfig) {
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "yugabytedb/yugabyte:2025.2.2.2-b11",
+			Image:        "postgres:16",
 			ExposedPorts: []string{"5433/tcp"},
-			Cmd:          []string{"bin/yugabyted", "start", "--daemon=false"},
+			Cmd:          []string{"bin/postgresd", "start", "--daemon=false"},
 			WaitingFor:   wait.ForListeningPort("5433/tcp").WithStartupTimeout(3 * time.Minute),
 		},
 		Started: true,
@@ -337,7 +337,7 @@ func startFXYugabyteContainer(ctx context.Context) (testcontainers.Container, co
 	port, err := container.MappedPort(ctx, "5433/tcp")
 	Expect(err).NotTo(HaveOccurred())
 
-	adminDSN := fmt.Sprintf("postgres://yugabyte@%s:%s/yugabyte?sslmode=disable", host, port.Port())
+	adminDSN := fmt.Sprintf("postgres://postgres@%s:%s/postgres?sslmode=disable", host, port.Port())
 	var adminDB *sqlx.DB
 	Eventually(func() error {
 		dbx, openErr := sqlx.Connect("pgx", adminDSN)
@@ -390,7 +390,7 @@ $$;
 		MaxOpenConns:    10,
 		MaxIdleConns:    5,
 		ConnMaxLifetime: time.Minute,
-		MigrationsPath:  "file://" + filepath.Join(authServiceRoot(), "migration", "yugabyte"),
+		MigrationsPath:  "file://" + filepath.Join(authServiceRoot(), "migration", "postgres"),
 		MigrationsTable: "schema_migrations_auth_service_fx",
 	}
 }

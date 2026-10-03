@@ -5,6 +5,7 @@ import (
 	eventbroker "auth-service/internal/presentation/event_broker"
 	"context"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/resilience"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -71,8 +72,14 @@ func (b *natsBroker) Subscribe(ctx context.Context, subject string, handler even
 	b.log.Info("subscribing to subject", logging.String("subject", subject))
 
 	_, err := b.nc.Subscribe(subject, func(msg *nats.Msg) {
-		if err := handler(ctx, msg.Subject, msg.Data); err != nil {
+		err := resilience.Retry(ctx, resilience.RetryPolicyFromEnv(), func(callCtx context.Context, _ int) error {
+			return handler(callCtx, msg.Subject, msg.Data)
+		})
+		if err != nil {
 			b.log.Error("message handler failed", logging.String("subject", msg.Subject), logging.Err(err))
+			if publishErr := b.nc.Publish(subject+".dead-letter", msg.Data); publishErr != nil {
+				b.log.Error("nats dead-letter publish failed", logging.String("subject", subject), logging.Err(publishErr))
+			}
 			return
 		}
 

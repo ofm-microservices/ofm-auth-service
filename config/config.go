@@ -9,6 +9,7 @@ type Config struct {
 	GRPC    GRPCConfig
 	Metrics MetricsConfig
 	NATS    NATSConfig
+	Kafka   KafkaConfig
 	JWT     JWTConfig
 }
 

@@ -2,7 +2,7 @@ package mapper
 
 import (
 	auth "auth-service/internal/domain"
-	"auth-service/internal/infra/write/yugabyte/model"
+	"auth-service/internal/infra/write/postgres/model"
 	"testing"
 	"time"
 
@@ -13,7 +13,7 @@ import (
 func TestMapper(t *testing.T) {
 	t.Helper()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Yugabyte Mapper Suite")
+	RunSpecs(t, "PostgreSQL Mapper Suite")
 }
 
 var _ = Describe("MapCredentialRowToDomain", func() {

@@ -10,6 +10,7 @@ import (
 	"net"
 
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	transportgrpc "github.com/ofm-microservices/ofm-common/pkg/observability/grpc"
 	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
 	authv1 "github.com/ofm-microservices/ofm-common/proto/auth/v1"
 	"google.golang.org/grpc"
@@ -36,7 +37,7 @@ func NewServer(svc app.AuthService, cfg config.GRPCConfig, log logging.Logger) (
 		return nil, ErrNilLogger
 	}
 
-	grpcSrv := grpc.NewServer(grpc.UnaryInterceptor(metrics.UnaryServerInterceptor()))
+	grpcSrv := grpc.NewServer(grpc.ChainUnaryInterceptor(metrics.UnaryServerInterceptor(), transportgrpc.UnaryServerInterceptor(log)))
 	s := &server{
 		svc: svc,
 		cfg: cfg,
@@ -90,7 +91,7 @@ func (s *server) ExistsByEmail(ctx context.Context, req *authv1.ExistsByEmailReq
 func (s *server) GetEmailByUserID(ctx context.Context, req *authv1.GetEmailByUserIDRequest) (*authv1.GetEmailByUserIDResponse, error) {
 	email, err := s.svc.GetEmailByUserID(ctx, req.GetUserId())
 	if err != nil {
-		s.log.Error("get email by user id failed", logging.Err(err))
+		s.log.Warn("auth credential not found", logging.Err(err))
 		return nil, status.Error(codes.NotFound, "auth credential not found")
 	}
 	return &authv1.GetEmailByUserIDResponse{UserId: req.GetUserId(), Email: email}, nil
@@ -100,7 +101,7 @@ func (s *server) GetEmailByUserID(ctx context.Context, req *authv1.GetEmailByUse
 func (s *server) VerifyRegistrationEmail(ctx context.Context, req *authv1.VerifyRegistrationEmailRequest) (*authv1.VerifyRegistrationEmailResponse, error) {
 	result, err := s.svc.VerifyRegistrationEmail(ctx, req.GetUserId(), req.GetCode())
 	if err != nil {
-		s.log.Error("verify registration email failed", logging.Err(err))
+		s.log.Warn("invalid registration email verification", logging.Err(err))
 		return nil, status.Error(codes.InvalidArgument, "invalid registration email verification")
 	}
 
@@ -116,7 +117,7 @@ func (s *server) VerifyRegistrationEmail(ctx context.Context, req *authv1.Verify
 func (s *server) IssueRegistrationTokens(ctx context.Context, req *authv1.IssueRegistrationTokensRequest) (*authv1.IssueRegistrationTokensResponse, error) {
 	tokens, err := s.svc.IssueRegistrationTokens(ctx, req.GetUserId())
 	if err != nil {
-		s.log.Error("issue registration tokens failed", logging.Err(err))
+		s.log.Warn("registration tokens unavailable", logging.Err(err))
 		return nil, status.Error(codes.FailedPrecondition, "registration tokens unavailable")
 	}
 
@@ -133,7 +134,7 @@ func (s *server) IssueRegistrationTokens(ctx context.Context, req *authv1.IssueR
 func (s *server) SignIn(ctx context.Context, req *authv1.SignInRequest) (*authv1.SignInResponse, error) {
 	tokens, err := s.svc.SignIn(ctx, req.GetIdentifier(), req.GetPassword())
 	if err != nil {
-		s.log.Error("sign in failed", logging.Err(err))
+		s.log.Warn("invalid credentials", logging.Err(err))
 		return nil, status.Error(codes.Unauthenticated, "invalid credentials")
 	}
 
@@ -150,13 +151,15 @@ func (s *server) SignIn(ctx context.Context, req *authv1.SignInRequest) (*authv1
 func (s *server) Refresh(ctx context.Context, req *authv1.RefreshRequest) (*authv1.RefreshResponse, error) {
 	tokens, err := s.svc.Refresh(ctx, req.GetRefreshToken())
 	if err != nil {
-		s.log.Error("refresh failed", logging.Err(err))
 		switch err {
 		case auth.ErrInvalidRefreshToken:
+			s.log.Warn("invalid refresh token", logging.Err(err))
 			return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
 		case auth.ErrRefreshTokenExpired, auth.ErrRefreshTokenRevoked, auth.ErrInvalidCredentials, auth.ErrAuthNotFound:
+			s.log.Warn("invalid refresh token", logging.Err(err))
 			return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
 		default:
+			s.log.Error("refresh failed", logging.Err(err))
 			return nil, status.Error(codes.Internal, "internal server error")
 		}
 	}
@@ -173,13 +176,15 @@ func (s *server) Refresh(ctx context.Context, req *authv1.RefreshRequest) (*auth
 // SignOut revokes a refresh token and ends the session.
 func (s *server) SignOut(ctx context.Context, req *authv1.SignOutRequest) (*authv1.SignOutResponse, error) {
 	if err := s.svc.SignOut(ctx, req.GetRefreshToken()); err != nil {
-		s.log.Error("sign out failed", logging.Err(err))
 		switch err {
 		case auth.ErrInvalidRefreshToken:
+			s.log.Warn("invalid refresh token", logging.Err(err))
 			return nil, status.Error(codes.InvalidArgument, "invalid refresh token")
 		case auth.ErrRefreshTokenExpired, auth.ErrRefreshTokenRevoked, auth.ErrInvalidCredentials, auth.ErrAuthNotFound:
+			s.log.Warn("invalid refresh token", logging.Err(err))
 			return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
 		default:
+			s.log.Error("sign out failed", logging.Err(err))
 			return nil, status.Error(codes.Internal, "internal server error")
 		}
 	}
